@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Map Transition IA - Standard Téléphonique</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #faf9f6;
+    color: #333;
+    overflow: hidden;
+    height: 100vh;
+  }
+
+  #toolbar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 52px;
+    background: #fff;
+    border-bottom: 1px solid #e0ddd8;
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 10px;
+    z-index: 100;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  }
+
+  #toolbar h1 {
+    font-size: 15px;
+    font-weight: 700;
+    color: #8b5cf6;
+    margin-right: 20px;
+    white-space: nowrap;
+  }
+
+  .toolbar-btn {
+    padding: 5px 12px;
+    border: 1px solid #d4d0ca;
+    border-radius: 6px;
+    background: #fff;
+    color: #444;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .toolbar-btn:hover { background: #f3f1ee; border-color: #b0aca5; }
+  .toolbar-btn.active { background: #8b5cf6; color: #fff; border-color: #8b5cf6; }
+
+  .sep { width: 1px; height: 24px; background: #e0ddd8; margin: 0 4px; }
+
+  .style-picker { display: flex; gap: 4px; align-items: center; }
+  .style-picker label { font-size: 11px; color: #888; margin-right: 4px; }
+
+  .color-dot {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: all 0.15s;
+  }
+  .color-dot:hover, .color-dot.active {
+    border-color: #333;
+    transform: scale(1.15);
+  }
+
+  .style-btn {
+    padding: 3px 8px;
+    border: 1px solid #d4d0ca;
+    border-radius: 4px;
+    background: #fff;
+    color: #555;
+    cursor: pointer;
+    font-size: 11px;
+    transition: all 0.15s;
+  }
+  .style-btn:hover { background: #f3f1ee; }
+  .style-btn.active { background: #eee; border-color: #999; }
+
+  #canvas {
+    position: absolute;
+    top: 52px; left: 0;
+    width: 100%; height: calc(100% - 52px);
+    overflow: hidden;
+    cursor: grab;
+  }
+  #canvas.grabbing { cursor: grabbing; }
+
+  #world {
+    position: absolute;
+    width: 100%; height: 100%;
+    min-width: 4000px; min-height: 4000px;
+    background:
+      radial-gradient(circle, #d8d5cf 0.8px, transparent 0.8px);
+    background-size: 32px 32px;
+  }
+
+  /* SVG for arrows */
+  svg.connections {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 0;
+  }
+  svg.connections path.arrow-solid,
+  svg.connections path.arrow-dashed {
+    fill: none;
+    stroke-width: 2;
+    pointer-events: none;
+  }
+  /* Invisible fat hitbox path for clicking */
+  svg.connections path.hitbox {
+    fill: none;
+    stroke: transparent;
+    stroke-width: 18;
+    pointer-events: stroke;
+    cursor: pointer;
+  }
+
+  /* HTML labels on arrows */
+  .conn-label {
+    position: absolute;
+    font-size: 11px;
+    font-weight: 700;
+    color: #555;
+    background: #faf9f6;
+    padding: 1px 6px;
+    border-radius: 4px;
+    cursor: pointer;
+    pointer-events: auto;
+    z-index: 2;
+    user-select: none;
+    transform: translate(-50%, -100%);
+    white-space: nowrap;
+  }
+  .conn-label:hover {
+    background: #eee;
+    color: #333;
+  }
+  .conn-label.empty-label {
+    opacity: 0;
+    padding: 2px 8px;
+  }
+  .conn-label.empty-label:hover {
+    opacity: 0.6;
+  }
+  .conn-label.empty-label::before {
+    content: '+';
+    color: #999;
+  }
+  svg.connections .arrow-solid { stroke: #888; stroke-dasharray: none; }
+  svg.connections .arrow-dashed { stroke: #aaa; stroke-dasharray: 8 5; }
+
+  /* Cards */
+  .card {
+    position: absolute;
+    border-radius: 10px;
+    padding: 12px 18px;
+    cursor: grab;
+    user-select: none;
+    text-align: center;
+    min-width: 140px;
+    max-width: 260px;
+    z-index: 1;
+    transition: box-shadow 0.2s;
+  }
+  .card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.12); z-index: 5; }
+  .card.dragging {
+    box-shadow: 0 8px 30px rgba(0,0,0,0.18);
+    z-index: 10;
+    cursor: grabbing;
+    opacity: 0.95;
+  }
+
+  .card-title {
+    font-weight: 700;
+    font-size: 13px;
+    margin-bottom: 3px;
+    outline: none;
+    line-height: 1.3;
+  }
+  .card-desc {
+    font-size: 11px;
+    opacity: 0.7;
+    outline: none;
+    line-height: 1.3;
+  }
+
+  .card .delete-btn {
+    position: absolute;
+    top: 2px; right: 4px;
+    width: 18px; height: 18px;
+    border: none;
+    background: transparent;
+    color: inherit;
+    opacity: 0;
+    cursor: pointer;
+    font-size: 13px;
+    border-radius: 3px;
+    transition: opacity 0.15s;
+  }
+  .card:hover .delete-btn { opacity: 0.4; }
+  .card .delete-btn:hover { opacity: 1; background: rgba(0,0,0,0.08); }
+
+  /* Connector anchors */
+  .anchor {
+    position: absolute;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: #8b5cf6;
+    opacity: 0;
+    cursor: crosshair;
+    z-index: 20;
+    transition: opacity 0.15s;
+  }
+  .card:hover .anchor { opacity: 0.7; }
+  .anchor:hover { opacity: 1 !important; transform: scale(1.3); }
+  .anchor.top    { top: -5px; left: 50%; transform: translateX(-50%); }
+  .anchor.bottom { bottom: -5px; left: 50%; transform: translateX(-50%); }
+  .anchor.left   { left: -5px; top: 50%; transform: translateY(-50%); }
+  .anchor.right  { right: -5px; top: 50%; transform: translateY(-50%); }
+
+  /* Card styles */
+  /* Filled */
+  .card[data-style="filled"][data-color="gray"]   { background: #f5f3ef; color: #444; border: 1px solid #e0ddd8; }
+  .card[data-style="filled"][data-color="purple"] { background: #ede9fe; color: #5b21b6; border: 1px solid #c4b5fd; }
+  .card[data-style="filled"][data-color="green"]  { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
+  .card[data-style="filled"][data-color="orange"] { background: #ffedd5; color: #9a3412; border: 1px solid #fdba74; }
+  .card[data-style="filled"][data-color="blue"]   { background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; }
+  .card[data-style="filled"][data-color="red"]    { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+  .card[data-style="filled"][data-color="yellow"] { background: #fef9c3; color: #854d0e; border: 1px solid #fde047; }
+  .card[data-style="filled"][data-color="teal"]   { background: #ccfbf1; color: #115e59; border: 1px solid #5eead4; }
+
+  /* Border only */
+  .card[data-style="border"][data-color="gray"]   { background: #fff; color: #444; border: 2px solid #ccc; }
+  .card[data-style="border"][data-color="purple"] { background: #fff; color: #5b21b6; border: 2px solid #8b5cf6; }
+  .card[data-style="border"][data-color="green"]  { background: #fff; color: #065f46; border: 2px solid #34d399; }
+  .card[data-style="border"][data-color="orange"] { background: #fff; color: #9a3412; border: 2px solid #f97316; }
+  .card[data-style="border"][data-color="blue"]   { background: #fff; color: #1e40af; border: 2px solid #3b82f6; }
+  .card[data-style="border"][data-color="red"]    { background: #fff; color: #991b1b; border: 2px solid #ef4444; }
+  .card[data-style="border"][data-color="yellow"] { background: #fff; color: #854d0e; border: 2px solid #eab308; }
+  .card[data-style="border"][data-color="teal"]   { background: #fff; color: #115e59; border: 2px solid #14b8a6; }
+
+  /* Dashed border */
+  .card[data-style="dashed"][data-color="gray"]   { background: #fff; color: #444; border: 2px dashed #ccc; }
+  .card[data-style="dashed"][data-color="purple"] { background: #fff; color: #5b21b6; border: 2px dashed #8b5cf6; }
+  .card[data-style="dashed"][data-color="green"]  { background: #fff; color: #065f46; border: 2px dashed #34d399; }
+  .card[data-style="dashed"][data-color="orange"] { background: #fff; color: #9a3412; border: 2px dashed #f97316; }
+  .card[data-style="dashed"][data-color="blue"]   { background: #fff; color: #1e40af; border: 2px dashed #3b82f6; }
+  .card[data-style="dashed"][data-color="red"]    { background: #fff; color: #991b1b; border: 2px dashed #ef4444; }
+  .card[data-style="dashed"][data-color="yellow"] { background: #fff; color: #854d0e; border: 2px dashed #eab308; }
+  .card[data-style="dashed"][data-color="teal"]   { background: #fff; color: #115e59; border: 2px dashed #14b8a6; }
+
+  #zoom-info {
+    position: fixed;
+    bottom: 10px; right: 14px;
+    font-size: 11px;
+    color: #aaa;
+    z-index: 100;
+  }
+
+  #connect-banner {
+    display: none;
+    position: fixed;
+    bottom: 14px; left: 50%;
+    transform: translateX(-50%);
+    background: #8b5cf6;
+    color: #fff;
+    padding: 7px 18px;
+    border-radius: 18px;
+    font-size: 12px;
+    z-index: 100;
+  }
+  #connect-banner.visible { display: block; }
+
+  /* Arrow type selector */
+  #arrow-type-picker {
+    display: none;
+    align-items: center;
+    gap: 4px;
+  }
+  #arrow-type-picker.visible { display: flex; }
+
+  /* Color picker popup */
+  .color-popup {
+    position: absolute;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 10px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    pointer-events: auto;
+  }
+  .color-popup label {
+    font-size: 11px;
+    color: #666;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .color-popup input[type="color"] {
+    width: 28px;
+    height: 28px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    cursor: pointer;
+    padding: 0;
+  }
+  .color-popup select {
+    font-size: 11px;
+    padding: 2px 4px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+  }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <h1>Transition IA</h1>
+  <button class="toolbar-btn" onclick="addCard()">+ Étiquette</button>
+  <button class="toolbar-btn" id="connectBtn" onclick="toggleConnectMode()">↗ Relier</button>
+  <div id="arrow-type-picker">
+    <label style="font-size:11px;color:#888">Flèche:</label>
+    <button class="style-btn active" data-arrow="solid" onclick="pickArrow(this)">—</button>
+    <button class="style-btn" data-arrow="dashed" onclick="pickArrow(this)">- -</button>
+  </div>
+  <div class="sep"></div>
+  <div class="style-picker">
+    <label>Style:</label>
+    <button class="style-btn active" data-style="filled" onclick="pickStyle(this)">Rempli</button>
+    <button class="style-btn" data-style="border" onclick="pickStyle(this)">Bordure</button>
+    <button class="style-btn" data-style="dashed" onclick="pickStyle(this)">Pointillé</button>
+  </div>
+  <div class="sep"></div>
+  <div class="style-picker">
+    <div class="color-dot active" data-color="gray" style="background:#bbb" onclick="selectColor(this)"></div>
+    <div class="color-dot" data-color="purple" style="background:#8b5cf6" onclick="selectColor(this)"></div>
+    <div class="color-dot" data-color="green" style="background:#34d399" onclick="selectColor(this)"></div>
+    <div class="color-dot" data-color="orange" style="background:#f97316" onclick="selectColor(this)"></div>
+    <div class="color-dot" data-color="blue" style="background:#3b82f6" onclick="selectColor(this)"></div>
+    <div class="color-dot" data-color="red" style="background:#ef4444" onclick="selectColor(this)"></div>
+    <div class="color-dot" data-color="yellow" style="background:#eab308" onclick="selectColor(this)"></div>
+    <div class="color-dot" data-color="teal" style="background:#14b8a6" onclick="selectColor(this)"></div>
+  </div>
+  <div style="flex:1"></div>
+  <button class="toolbar-btn" onclick="exportData()">Sauver</button>
+  <button class="toolbar-btn" onclick="importData()">Charger</button>
+</div>
+
+<div id="canvas">
+  <div id="world">
+    <svg class="connections" id="svg">
+      <defs>
+        <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#888" />
+        </marker>
+        <marker id="arrowhead-light" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#aaa" />
+        </marker>
+      </defs>
+    </svg>
+  </div>
+</div>
+
+<div id="connect-banner">Cliquez sur deux étiquettes pour les relier — Echap pour annuler</div>
+<div id="zoom-info">100%</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SUPABASE_URL = 'https://ywdqcolkmuszkvlvhttp.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl3ZHFjb2xrbXVzemt2bHZodHRwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMTE0MzAsImV4cCI6MjA4OTY4NzQzMH0.k1fiiiaoVXbNLAV342isZv3Elx-Zdb9O2IfymuAGu1I';
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const MAP_ID = 'main';
+
+const world = document.getElementById('world');
+const canvas = document.getElementById('canvas');
+const svg = document.getElementById('svg');
+const zoomInfo = document.getElementById('zoom-info');
+
+let currentColor = 'gray';
+let currentStyle = 'filled';
+let currentArrow = 'solid';
+let cardIdCounter = 0;
+let connections = [];
+let connectMode = false;
+let connectFrom = null;
+
+let panX = 0, panY = 0, scale = 1;
+let isPanning = false, panStartX, panStartY;
+
+function updateTransform() {
+  world.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
+  world.style.transformOrigin = '0 0';
+  zoomInfo.textContent = Math.round(scale * 100) + '%';
+  updateAllConnections();
+}
+
+canvas.addEventListener('mousedown', (e) => {
+  if (e.target === canvas || e.target === world || e.target === svg || e.target.tagName === 'path') {
+    isPanning = true;
+    panStartX = e.clientX - panX;
+    panStartY = e.clientY - panY;
+    canvas.classList.add('grabbing');
+  }
+});
+window.addEventListener('mousemove', (e) => {
+  if (isPanning) {
+    panX = e.clientX - panStartX;
+    panY = e.clientY - panStartY;
+    updateTransform();
+  }
+});
+window.addEventListener('mouseup', () => {
+  isPanning = false;
+  canvas.classList.remove('grabbing');
+});
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const delta = e.deltaY > 0 ? 0.92 : 1.08;
+  const newScale = Math.min(3, Math.max(0.15, scale * delta));
+  const rect = canvas.getBoundingClientRect();
+  const cx = e.clientX - rect.left;
+  const cy = e.clientY - rect.top;
+  panX = cx - (cx - panX) * (newScale / scale);
+  panY = cy - (cy - panY) * (newScale / scale);
+  scale = newScale;
+  updateTransform();
+}, { passive: false });
+
+function rgbToHex(rgb) {
+  if (rgb.startsWith('#')) return rgb;
+  const m = rgb.match(/\d+/g);
+  if (!m || m.length < 3) return '#ffffff';
+  return '#' + m.slice(0,3).map(x => parseInt(x).toString(16).padStart(2,'0')).join('');
+}
+
+function selectColor(el) {
+  document.querySelectorAll('.color-dot').forEach(d => d.classList.remove('active'));
+  el.classList.add('active');
+  currentColor = el.dataset.color;
+}
+function pickStyle(el) {
+  el.parentElement.querySelectorAll('.style-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  currentStyle = el.dataset.style;
+}
+function pickArrow(el) {
+  el.parentElement.querySelectorAll('.style-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  currentArrow = el.dataset.arrow;
+}
+
+function addCard(title, desc, x, y, color, style, id) {
+  title = title || 'Nouvelle étiquette';
+  desc = desc || 'Description...';
+  color = color || currentColor;
+  style = style || currentStyle;
+
+  const card = document.createElement('div');
+  const cid = id ?? ('card-' + cardIdCounter++);
+  card.id = cid;
+  card.className = 'card';
+  card.dataset.color = color;
+  card.dataset.style = style;
+
+  if (x === undefined) {
+    const rect = canvas.getBoundingClientRect();
+    x = (rect.width / 2 - panX) / scale - 80 + Math.random() * 30;
+    y = (rect.height / 2 - panY) / scale - 30 + Math.random() * 30;
+  }
+  card.style.left = x + 'px';
+  card.style.top = y + 'px';
+
+  card.innerHTML = `
+    <button class="delete-btn" onclick="deleteCard('${cid}')">&times;</button>
+    <div class="card-title" contenteditable="true">${title}</div>
+    <div class="card-desc" contenteditable="true">${desc}</div>
+    <div class="anchor top" data-side="top"></div>
+    <div class="anchor bottom" data-side="bottom"></div>
+    <div class="anchor left" data-side="left"></div>
+    <div class="anchor right" data-side="right"></div>
+  `;
+
+  // Drag
+  let isDragging = false, startX, startY, origX, origY;
+  card.addEventListener('mousedown', (e) => {
+    if (e.target.contentEditable === 'true' || e.target.classList.contains('delete-btn') || e.target.classList.contains('anchor')) return;
+    if (connectMode) { handleConnectClick(cid); return; }
+    isDragging = true;
+    card.classList.add('dragging');
+    startX = e.clientX; startY = e.clientY;
+    origX = parseFloat(card.style.left);
+    origY = parseFloat(card.style.top);
+    e.stopPropagation();
+  });
+  window.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    card.style.left = (origX + (e.clientX - startX) / scale) + 'px';
+    card.style.top = (origY + (e.clientY - startY) / scale) + 'px';
+    updateAllConnections();
+  });
+  window.addEventListener('mouseup', () => {
+    if (isDragging) { isDragging = false; card.classList.remove('dragging'); saveToLocal(); }
+  });
+
+  // Clic droit → ouvrir popup couleur
+  card.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Fermer popup existant
+    document.querySelectorAll('.color-popup').forEach(p => p.remove());
+
+    const popup = document.createElement('div');
+    popup.className = 'color-popup';
+    popup.innerHTML = `
+      <label>Fond <input type="color" id="cp-bg" value="${rgbToHex(getComputedStyle(card).backgroundColor)}"></label>
+      <label>Texte <input type="color" id="cp-text" value="${rgbToHex(getComputedStyle(card).color)}"></label>
+      <label>Bordure <input type="color" id="cp-border" value="${rgbToHex(getComputedStyle(card).borderColor)}"></label>
+      <label>Style <select id="cp-style">
+        <option value="solid" ${getComputedStyle(card).borderStyle==='solid'?'selected':''}>Plein</option>
+        <option value="dashed" ${getComputedStyle(card).borderStyle==='dashed'?'selected':''}>Pointillé</option>
+      </select></label>
+    `;
+    popup.style.left = (parseFloat(card.style.left) + card.offsetWidth + 8) + 'px';
+    popup.style.top = card.style.top;
+
+    popup.querySelectorAll('input, select').forEach(input => {
+      input.addEventListener('input', () => {
+        card.style.backgroundColor = popup.querySelector('#cp-bg').value;
+        card.style.color = popup.querySelector('#cp-text').value;
+        card.style.borderColor = popup.querySelector('#cp-border').value;
+        card.style.borderStyle = popup.querySelector('#cp-style').value;
+        card.style.borderWidth = '2px';
+        saveToLocal();
+      });
+      input.addEventListener('mousedown', (e) => e.stopPropagation());
+    });
+
+    // Fermer en cliquant ailleurs
+    setTimeout(() => {
+      const closer = (ev) => {
+        if (!popup.contains(ev.target)) {
+          popup.remove();
+          window.removeEventListener('mousedown', closer);
+        }
+      };
+      window.addEventListener('mousedown', closer);
+    }, 100);
+
+    world.appendChild(popup);
+  });
+
+  // Anchor click for connection
+  card.querySelectorAll('.anchor').forEach(a => {
+    a.addEventListener('mousedown', (e) => {
+      e.stopPropagation();
+      if (!connectMode) toggleConnectMode();
+      handleConnectClick(cid, a.dataset.side);
+    });
+  });
+
+  // Stop editable clicks from triggering connect
+  card.querySelectorAll('[contenteditable]').forEach(el => {
+    el.addEventListener('mousedown', (e) => e.stopPropagation());
+    el.addEventListener('input', () => saveToLocal());
+  });
+
+  world.appendChild(card);
+  saveToLocal();
+  return cid;
+}
+
+function deleteCard(id) {
+  const card = document.getElementById(id);
+  if (!card) return;
+  connections = connections.filter(c => {
+    if (c.from === id || c.to === id) { c.el.remove(); return false; }
+    return true;
+  });
+  card.remove();
+  saveToLocal();
+}
+
+// Connect mode
+function toggleConnectMode() {
+  connectMode = !connectMode;
+  connectFrom = null;
+  document.getElementById('connectBtn').classList.toggle('active', connectMode);
+  document.getElementById('connect-banner').classList.toggle('visible', connectMode);
+  document.getElementById('arrow-type-picker').classList.toggle('visible', connectMode);
+}
+
+function handleConnectClick(id, side) {
+  if (!connectFrom) {
+    connectFrom = { id, side: side || 'bottom' };
+    document.getElementById(id).style.outline = '2px solid #8b5cf6';
+  } else if (connectFrom.id !== id) {
+    const toSide = side || 'top';
+    const exists = connections.some(c =>
+      (c.from === connectFrom.id && c.to === id) || (c.from === id && c.to === connectFrom.id)
+    );
+    if (!exists) {
+      const newConn = createConnection(connectFrom.id, connectFrom.side, id, toSide, currentArrow, 'label');
+      // Focus le label pour édition immédiate
+      setTimeout(() => {
+        if (newConn && newConn.labelEl) {
+          const span = newConn.labelEl.querySelector('span');
+          if (span) {
+            span.focus();
+            document.execCommand('selectAll', false, null);
+          }
+        }
+      }, 50);
+    }
+    document.getElementById(connectFrom.id).style.outline = '';
+    connectFrom = null;
+    toggleConnectMode();
+    saveToLocal();
+  }
+}
+
+function createConnection(fromId, fromSide, toId, toSide, arrowType, label) {
+  arrowType = arrowType || 'solid';
+
+  // Visible path
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.classList.add('arrow-' + arrowType);
+  path.setAttribute('marker-end', arrowType === 'dashed' ? 'url(#arrowhead-light)' : 'url(#arrowhead)');
+  svg.appendChild(path);
+
+  // Fat invisible hitbox for easy clicking
+  const hitbox = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  hitbox.classList.add('hitbox');
+  svg.appendChild(hitbox);
+
+  let labelEl = null;
+  function makeLabelEl(text) {
+    const el = document.createElement('div');
+    el.className = 'conn-label';
+    const span = document.createElement('span');
+    span.textContent = text;
+    span.contentEditable = 'true';
+    span.style.outline = 'none';
+    span.style.minWidth = '20px';
+    span.style.display = 'inline-block';
+    el.appendChild(span);
+
+    // Empêcher le drag du canvas quand on édite
+    span.addEventListener('mousedown', (e) => e.stopPropagation());
+    span.addEventListener('click', (e) => e.stopPropagation());
+
+    // Quand on tape, enlever le placeholder
+    span.addEventListener('input', () => {
+      if (span.textContent.trim()) {
+        el.classList.remove('empty-label');
+      } else {
+        el.classList.add('empty-label');
+      }
+    });
+
+    // Sauvegarder quand on finit d'éditer
+    span.addEventListener('blur', () => {
+      const c = connections.find(c => c.labelEl === el);
+      if (c) {
+        if (span.textContent.trim() === '') {
+          el.classList.add('empty-label');
+          span.textContent = '';
+          c.label = '';
+        } else {
+          el.classList.remove('empty-label');
+          c.label = span.textContent.trim();
+        }
+        saveToLocal();
+      }
+    });
+
+    // Enter = valider
+    span.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); span.blur(); }
+    });
+
+    world.appendChild(el);
+    return el;
+  }
+
+  // Toujours créer un label (vide = placeholder cliquable "+")
+  labelEl = makeLabelEl(label || '');
+  if (!label) {
+    labelEl.classList.add('empty-label');
+  }
+
+  // Double-clic sur le hitbox → supprimer la flèche
+  hitbox.addEventListener('dblclick', (e) => {
+    e.stopPropagation();
+    const conn = connections.find(c => c.el === path);
+    connections = connections.filter(c => c.el !== path);
+    path.remove();
+    hitbox.remove();
+    if (conn && conn.labelEl) conn.labelEl.remove();
+    saveToLocal();
+  });
+
+  const conn = { from: fromId, fromSide, to: toId, toSide, type: arrowType, el: path, hitbox, labelEl, label: label || '' };
+  connections.push(conn);
+  updateConnection(conn);
+  return conn;
+}
+
+function getAnchorPoint(cardId, side) {
+  const card = document.getElementById(cardId);
+  if (!card) return { x: 0, y: 0 };
+  const x = parseFloat(card.style.left);
+  const y = parseFloat(card.style.top);
+  const w = card.offsetWidth;
+  const h = card.offsetHeight;
+  switch (side) {
+    case 'top':    return { x: x + w/2, y: y };
+    case 'bottom': return { x: x + w/2, y: y + h };
+    case 'left':   return { x: x, y: y + h/2 };
+    case 'right':  return { x: x + w, y: y + h/2 };
+    default:       return { x: x + w/2, y: y + h };
+  }
+}
+
+function updateConnection(conn) {
+  const a = getAnchorPoint(conn.from, conn.fromSide);
+  const b = getAnchorPoint(conn.to, conn.toSide);
+
+  // Smooth cubic bezier
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  let cx1, cy1, cx2, cy2;
+
+  const tension = Math.min(Math.abs(dy) * 0.5, 80);
+  const htension = Math.min(Math.abs(dx) * 0.5, 80);
+
+  if (conn.fromSide === 'bottom' && conn.toSide === 'top') {
+    cx1 = a.x; cy1 = a.y + tension;
+    cx2 = b.x; cy2 = b.y - tension;
+  } else if (conn.fromSide === 'right' && conn.toSide === 'left') {
+    cx1 = a.x + htension; cy1 = a.y;
+    cx2 = b.x - htension; cy2 = b.y;
+  } else if (conn.fromSide === 'left' && conn.toSide === 'left') {
+    const off = Math.min(60, Math.abs(dy) * 0.4 + 20);
+    cx1 = a.x - off; cy1 = a.y;
+    cx2 = b.x - off; cy2 = b.y;
+  } else if (conn.fromSide === 'bottom' && conn.toSide === 'left') {
+    cx1 = a.x; cy1 = a.y + tension;
+    cx2 = b.x - htension; cy2 = b.y;
+  } else if (conn.fromSide === 'right' && conn.toSide === 'top') {
+    cx1 = a.x + htension; cy1 = a.y;
+    cx2 = b.x; cy2 = b.y - tension;
+  } else {
+    cx1 = a.x + dx * 0.3; cy1 = a.y + dy * 0.1;
+    cx2 = a.x + dx * 0.7; cy2 = b.y - dy * 0.1;
+  }
+
+  const d = `M${a.x},${a.y} C${cx1},${cy1} ${cx2},${cy2} ${b.x},${b.y}`;
+  conn.el.setAttribute('d', d);
+  if (conn.hitbox) conn.hitbox.setAttribute('d', d);
+
+  // Position label at midpoint of bezier
+  if (conn.labelEl) {
+    const mx = (a.x + cx1 + cx2 + b.x) / 4;
+    const my = (a.y + cy1 + cy2 + b.y) / 4;
+    conn.labelEl.style.left = mx + 'px';
+    conn.labelEl.style.top = my + 'px';
+  }
+}
+
+function updateAllConnections() {
+  connections.forEach(updateConnection);
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && connectMode) {
+    if (connectFrom) document.getElementById(connectFrom.id).style.outline = '';
+    connectFrom = null;
+    toggleConnectMode();
+  }
+});
+
+// Save / Load
+function getState() {
+  const cards = [];
+  document.querySelectorAll('.card').forEach(card => {
+    cards.push({
+      id: card.id,
+      title: card.querySelector('.card-title').textContent,
+      desc: card.querySelector('.card-desc').textContent,
+      x: parseFloat(card.style.left),
+      y: parseFloat(card.style.top),
+      color: card.dataset.color,
+      style: card.dataset.style,
+      customBg: card.style.backgroundColor || '',
+      customText: card.style.color || '',
+      customBorder: card.style.borderColor || '',
+      customBorderStyle: card.style.borderStyle || ''
+    });
+  });
+  return {
+    cards,
+    connections: connections.map(c => ({ from: c.from, fromSide: c.fromSide, to: c.to, toSide: c.toSide, type: c.type, label: c.label || '' })),
+    pan: { x: panX, y: panY },
+    scale,
+    cardIdCounter
+  };
+}
+
+function loadState(state) {
+  document.querySelectorAll('.card').forEach(c => c.remove());
+  connections.forEach(c => c.el.remove());
+  connections = [];
+  cardIdCounter = state.cardIdCounter || 0;
+  state.cards.forEach(c => {
+    addCard(c.title, c.desc, c.x, c.y, c.color, c.style, c.id);
+    if (c.customBg || c.customText || c.customBorder) {
+      const el = document.getElementById(c.id);
+      if (el) {
+        if (c.customBg) el.style.backgroundColor = c.customBg;
+        if (c.customText) el.style.color = c.customText;
+        if (c.customBorder) el.style.borderColor = c.customBorder;
+        if (c.customBorderStyle) el.style.borderStyle = c.customBorderStyle;
+        if (c.customBorder || c.customBorderStyle) el.style.borderWidth = '2px';
+      }
+    }
+  });
+  state.connections.forEach(c => createConnection(c.from, c.fromSide || 'bottom', c.to, c.toSide || 'top', c.type, c.label || ''));
+  if (state.pan) { panX = state.pan.x; panY = state.pan.y; }
+  if (state.scale) scale = state.scale;
+  updateTransform();
+}
+
+let _saveTimer = null;
+let _isSaving = false;
+let _ignoreNextUpdate = false;
+
+function saveToLocal() {
+  // Save to localStorage as backup
+  localStorage.setItem('ia-transition-map', JSON.stringify(getState()));
+
+  // Debounced save to Supabase
+  if (_saveTimer) clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(async () => {
+    if (_isSaving) return;
+    _isSaving = true;
+    _ignoreNextUpdate = true;
+    try {
+      await supabase.from('maps').upsert({
+        id: MAP_ID,
+        state: getState(),
+        updated_at: new Date().toISOString()
+      });
+    } catch(e) { console.error('Save error:', e); }
+    _isSaving = false;
+  }, 500);
+}
+
+function exportData() {
+  const blob = new Blob([JSON.stringify(getState(), null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'transition-ia-map.json';
+  a.click();
+}
+
+function importData() {
+  const input = document.createElement('input');
+  input.type = 'file'; input.accept = '.json';
+  input.onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const r = new FileReader();
+    r.onload = (ev) => { try { loadState(JSON.parse(ev.target.result)); } catch(e) { alert('Fichier invalide'); } };
+    r.readAsText(file);
+  };
+  input.click();
+}
+
+// Resize SVG
+function resizeSvg() {
+  svg.setAttribute('width', world.offsetWidth);
+  svg.setAttribute('height', world.offsetHeight);
+}
+resizeSvg();
+
+// Load from Supabase, fallback to localStorage
+async function initFromSupabase() {
+  try {
+    const { data, error } = await supabase.from('maps').select('state').eq('id', MAP_ID).single();
+    if (data && data.state && data.state.cards && data.state.cards.length > 0) {
+      loadState(data.state);
+    } else {
+      // Fallback localStorage
+      const saved = localStorage.getItem('ia-transition-map');
+      if (saved) {
+        try { loadState(JSON.parse(saved)); } catch(e) { createDefault(); }
+      } else {
+        createDefault();
+      }
+      // Push initial state to Supabase
+      saveToLocal();
+    }
+  } catch(e) {
+    console.error('Supabase load error:', e);
+    const saved = localStorage.getItem('ia-transition-map');
+    if (saved) {
+      try { loadState(JSON.parse(saved)); } catch(e2) { createDefault(); }
+    } else {
+      createDefault();
+    }
+  }
+}
+
+// Realtime: listen for changes from other users
+supabase
+  .channel('maps-realtime')
+  .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'maps', filter: `id=eq.${MAP_ID}` }, (payload) => {
+    if (_ignoreNextUpdate) {
+      _ignoreNextUpdate = false;
+      return;
+    }
+    const newState = payload.new.state;
+    if (newState && newState.cards) {
+      loadState(newState);
+    }
+  })
+  .subscribe();
+
+initFromSupabase();
+
+function createDefault() {
+  // Position cards centered
+  const cx = 500, cy = 150;
+
+  addCard('Appel entrant', 'Client appelle Thibault IA', cx, cy, 'gray', 'border');
+  addCard('Thibault IA qualifie', 'Détecte le motif d\'appel', cx, cy + 110, 'purple', 'filled');
+  addCard('SAV / Logistique', 'Voir branche gauche', cx - 230, cy + 230, 'gray', 'dashed');
+  // card-3: branche SAV - IA répond
+  addCard('IA a répondu correctement', 'Question résolue automatiquement', cx - 330, cy + 380, 'green', 'filled');
+  // card-4: branche SAV - transfert humain
+  addCard('Transfert vers humain', 'Cas non résolu par l\'IA', cx - 130, cy + 380, 'red', 'border');
+  addCard('Commercial', 'Appel de vente', cx + 250, cy + 200, 'orange', 'border');
+  addCard('Thibault IA conseille', 'Plante, taille, zone, budget', cx + 170, cy + 330, 'green', 'dashed');
+  addCard('Client conseillé parfaitement', 'Besoin identifié, confiance établie', cx + 50, cy + 460, 'green', 'filled');
+  addCard('Client complexe', 'Transfert humain', cx + 310, cy + 460, 'red', 'border');
+  addCard('Prospect créé dans Pipedrive', 'Nom, contact, besoin, zone', cx + 120, cy + 600, 'yellow', 'filled');
+  // card-10: Photo produit
+  addCard('Photo du produit ?', 'Voulez-vous voir le produit en photo ?', cx + 120, cy + 740, 'blue', 'border');
+  // card-11: Contact WhatsApp
+  addCard('Contact sur WhatsApp', '98% de taux d\'ouverture', cx + 120, cy + 870, 'green', 'filled');
+  // card-12: Panier abandonné
+  addCard('Panier abandonné', 'Si on scrap son email → relance auto', cx - 150, cy + 740, 'red', 'dashed');
+  // card-13: Achat
+  addCard('Achat', 'Client converti', cx + 20, cy + 1010, 'green', 'filled');
+  // card-14: Relance
+  addCard('Relance', 'Suivi automatique', cx + 250, cy + 1010, 'orange', 'border');
+
+  // card-0: Appel entrant
+  // card-1: Thibault IA qualifie
+  // card-2: SAV / Logistique
+  // card-3: IA a répondu correctement
+  // card-4: Transfert vers humain
+  // card-5: Commercial
+  // card-6: Thibault IA conseille
+  // card-7: Client conseillé parfaitement
+  // card-8: Client complexe
+  // card-9: Prospect créé dans Pipedrive
+
+  createConnection('card-0', 'bottom', 'card-1', 'top', 'solid');                // Appel → Qualifie
+  createConnection('card-1', 'left',   'card-2', 'right', 'dashed', 'SAV');     // Qualifie → SAV
+  createConnection('card-2', 'bottom', 'card-3', 'top', 'solid', 'Oui');        // SAV → IA répond OK
+  createConnection('card-2', 'bottom', 'card-4', 'top', 'solid', 'Non');        // SAV → Transfert humain
+  createConnection('card-1', 'right',  'card-5', 'left', 'solid', 'Vente');     // Qualifie → Commercial
+  createConnection('card-5', 'bottom', 'card-6', 'top', 'solid');               // Commercial → Conseille
+  createConnection('card-6', 'bottom', 'card-7', 'top', 'solid', 'Oui');        // Conseille → Client OK
+  createConnection('card-6', 'right',  'card-8', 'top', 'dashed', 'Non');       // Conseille → Client complexe
+  createConnection('card-7', 'bottom', 'card-9', 'top', 'solid');               // Client OK → Pipedrive
+  createConnection('card-9', 'bottom', 'card-10', 'top', 'solid', 'Oui');       // Pipedrive → Photo
+  createConnection('card-10', 'bottom', 'card-11', 'top', 'solid');             // Photo → WhatsApp
+  createConnection('card-9', 'left',    'card-12', 'right', 'dashed', 'Non');   // Pipedrive → Panier abandonné
+  createConnection('card-11', 'bottom', 'card-13', 'top', 'solid', 'Oui');     // WhatsApp → Achat
+  createConnection('card-11', 'bottom', 'card-14', 'top', 'dashed', 'Non');    // WhatsApp → Relance
+
+  scale = 1;
+  panX = 0;
+  panY = 0;
+  updateTransform();
+  saveToLocal();
+}
+</script>
+</body>
+</html>
