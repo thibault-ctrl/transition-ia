@@ -849,7 +849,7 @@ function loadState(state) {
 
 let _saveTimer = null;
 let _isSaving = false;
-let _ignoreNextUpdate = false;
+let _lastSaveTime = 0;
 let _isDraggingAny = false;
 
 function saveToLocal() {
@@ -859,10 +859,10 @@ function saveToLocal() {
   // Debounced save to Supabase
   if (_saveTimer) clearTimeout(_saveTimer);
   _saveTimer = setTimeout(async () => {
-    if (_isDraggingAny) return; // Don't save while dragging
+    if (_isDraggingAny) return;
     if (_isSaving) return;
     _isSaving = true;
-    _ignoreNextUpdate = true;
+    _lastSaveTime = Date.now();
     try {
       await sb.from('maps').upsert({
         id: MAP_ID,
@@ -934,8 +934,8 @@ async function initFromSupabase() {
 sb
   .channel('maps-realtime')
   .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'maps', filter: `id=eq.${MAP_ID}` }, (payload) => {
-    if (_ignoreNextUpdate || _isDraggingAny) {
-      _ignoreNextUpdate = false;
+    // Ignore our own updates (within 3s of our last save) and during drag
+    if (_isDraggingAny || (Date.now() - _lastSaveTime < 3000)) {
       return;
     }
     const newState = payload.new.state;
