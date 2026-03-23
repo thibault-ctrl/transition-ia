@@ -497,6 +497,7 @@ function addCard(title, desc, x, y, color, style, id) {
     if (e.target.contentEditable === 'true' || e.target.classList.contains('delete-btn') || e.target.classList.contains('anchor')) return;
     if (connectMode) { handleConnectClick(cid); return; }
     isDragging = true;
+    _isDraggingAny = true;
     card.classList.add('dragging');
     startX = e.clientX; startY = e.clientY;
     origX = parseFloat(card.style.left);
@@ -510,7 +511,7 @@ function addCard(title, desc, x, y, color, style, id) {
     updateAllConnections();
   });
   window.addEventListener('mouseup', () => {
-    if (isDragging) { isDragging = false; card.classList.remove('dragging'); saveToLocal(); }
+    if (isDragging) { isDragging = false; _isDraggingAny = false; card.classList.remove('dragging'); saveToLocal(); }
   });
 
   // Clic droit → ouvrir popup couleur
@@ -844,6 +845,7 @@ function loadState(state) {
 let _saveTimer = null;
 let _isSaving = false;
 let _ignoreNextUpdate = false;
+let _isDraggingAny = false;
 
 function saveToLocal() {
   // Save to localStorage as backup
@@ -852,6 +854,7 @@ function saveToLocal() {
   // Debounced save to Supabase
   if (_saveTimer) clearTimeout(_saveTimer);
   _saveTimer = setTimeout(async () => {
+    if (_isDraggingAny) return; // Don't save while dragging
     if (_isSaving) return;
     _isSaving = true;
     _ignoreNextUpdate = true;
@@ -863,7 +866,7 @@ function saveToLocal() {
       });
     } catch(e) { console.error('Save error:', e); }
     _isSaving = false;
-  }, 500);
+  }, 1500);
 }
 
 function exportData() {
@@ -926,7 +929,7 @@ async function initFromSupabase() {
 sb
   .channel('maps-realtime')
   .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'maps', filter: `id=eq.${MAP_ID}` }, (payload) => {
-    if (_ignoreNextUpdate) {
+    if (_ignoreNextUpdate || _isDraggingAny) {
       _ignoreNextUpdate = false;
       return;
     }
