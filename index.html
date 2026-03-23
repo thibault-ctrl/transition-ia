@@ -819,6 +819,7 @@ function getState() {
 }
 
 function loadState(state) {
+  _isLoading = true;
   document.querySelectorAll('.card').forEach(c => c.remove());
   document.querySelectorAll('.conn-label').forEach(c => c.remove());
   connections.forEach(c => {
@@ -845,14 +846,17 @@ function loadState(state) {
   if (state.pan) { panX = state.pan.x; panY = state.pan.y; }
   if (state.scale) scale = state.scale;
   updateTransform();
+  _isLoading = false;
 }
 
 let _saveTimer = null;
 let _isSaving = false;
 let _lastSaveTime = 0;
 let _isDraggingAny = false;
+let _isLoading = false;
 
 function saveToLocal() {
+  if (_isLoading) return; // Don't save during load
   // Save to localStorage as backup
   localStorage.setItem('ia-transition-map', JSON.stringify(getState()));
 
