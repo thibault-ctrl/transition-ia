@@ -379,7 +379,7 @@
 <script>
 const SUPABASE_URL = 'https://ywdqcolkmuszkvlvhttp.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl3ZHFjb2xrbXVzemt2bHZodHRwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMTE0MzAsImV4cCI6MjA4OTY4NzQzMH0.k1fiiiaoVXbNLAV342isZv3Elx-Zdb9O2IfymuAGu1I';
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const MAP_ID = 'main';
 
 const world = document.getElementById('world');
@@ -856,7 +856,7 @@ function saveToLocal() {
     _isSaving = true;
     _ignoreNextUpdate = true;
     try {
-      await supabase.from('maps').upsert({
+      await sb.from('maps').upsert({
         id: MAP_ID,
         state: getState(),
         updated_at: new Date().toISOString()
@@ -897,7 +897,7 @@ resizeSvg();
 // Load from Supabase, fallback to localStorage
 async function initFromSupabase() {
   try {
-    const { data, error } = await supabase.from('maps').select('state').eq('id', MAP_ID).single();
+    const { data, error } = await sb.from('maps').select('state').eq('id', MAP_ID).single();
     if (data && data.state && data.state.cards && data.state.cards.length > 0) {
       loadState(data.state);
     } else {
@@ -923,7 +923,7 @@ async function initFromSupabase() {
 }
 
 // Realtime: listen for changes from other users
-supabase
+sb
   .channel('maps-realtime')
   .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'maps', filter: `id=eq.${MAP_ID}` }, (payload) => {
     if (_ignoreNextUpdate) {
