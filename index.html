@@ -820,7 +820,12 @@ function getState() {
 
 function loadState(state) {
   document.querySelectorAll('.card').forEach(c => c.remove());
-  connections.forEach(c => c.el.remove());
+  document.querySelectorAll('.conn-label').forEach(c => c.remove());
+  connections.forEach(c => {
+    if (c.el) c.el.remove();
+    if (c.hitbox) c.hitbox.remove();
+    if (c.labelEl) c.labelEl.remove();
+  });
   connections = [];
   cardIdCounter = state.cardIdCounter || 0;
   state.cards.forEach(c => {
