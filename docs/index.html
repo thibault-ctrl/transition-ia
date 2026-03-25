@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Dance!</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow: hidden;
+    font-family: 'Arial Black', Arial, sans-serif;
+  }
+
+  #dance-container {
+    position: relative;
+    width: 100%;
+    max-width: 500px;
+    aspect-ratio: 2000 / 2777;
+    transition: transform 0.15s ease-out;
+    transform-origin: center bottom;
+  }
+
+  #dance-container img {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: opacity 0.05s step-end;
+  }
+
+  #photo1 { opacity: 1; }
+  #photo2 { opacity: 0; }
+
+  #dance-container.sway-left {
+    transform: translateX(-8px) rotate(-1.2deg) scale(1.02);
+  }
+  #dance-container.sway-right {
+    transform: translateX(8px) rotate(1.2deg) scale(1.02);
+  }
+  #dance-container.bounce {
+    transform: translateY(-6px) scale(1.04);
+  }
+
+  .disco-bg {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.5s;
+  }
+
+  .disco-bg.active { opacity: 1; }
+
+  .disco-light {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.4;
+    animation: discoMove 2s ease-in-out infinite alternate;
+  }
+
+  .disco-light:nth-child(1) {
+    width: 300px; height: 300px;
+    background: #ff006e;
+    top: -50px; left: -50px;
+    animation-duration: 2.5s;
+  }
+  .disco-light:nth-child(2) {
+    width: 250px; height: 250px;
+    background: #3a86ff;
+    bottom: -30px; right: -30px;
+    animation-duration: 3s;
+    animation-delay: 0.5s;
+  }
+  .disco-light:nth-child(3) {
+    width: 200px; height: 200px;
+    background: #ffbe0b;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    animation-duration: 1.8s;
+    animation-delay: 1s;
+  }
+
+  @keyframes discoMove {
+    0% { transform: translate(0, 0) scale(1); }
+    100% { transform: translate(30px, -20px) scale(1.2); }
+  }
+</style>
+</head>
+<body>
+
+<div class="disco-bg" id="discoBg">
+  <div class="disco-light"></div>
+  <div class="disco-light"></div>
+  <div class="disco-light"></div>
+</div>
+
+<div id="dance-container">
+  <img id="photo1" src="photo1.jpg" alt="Dance 1">
+  <img id="photo2" src="photo2.jpg" alt="Dance 2">
+</div>
+
+<audio id="music" preload="auto" loop>
+  <source src="music.mp3" type="audio/mpeg">
+</audio>
+
+<script>
+  const photo1 = document.getElementById('photo1');
+  const photo2 = document.getElementById('photo2');
+  const music = document.getElementById('music');
+  const discoBg = document.getElementById('discoBg');
+  const container = document.getElementById('dance-container');
+
+  let showFirst = true;
+  let beatCount = 0;
+  let musicStarted = false;
+  const BPM = 105;
+  const beatMs = (60 / BPM) * 1000;
+
+  function doBeat() {
+    beatCount++;
+    showFirst = !showFirst;
+    photo1.style.opacity = showFirst ? '1' : '0';
+    photo2.style.opacity = showFirst ? '0' : '1';
+
+    container.className = '';
+    void container.offsetWidth;
+    if (beatCount % 4 === 0) {
+      container.classList.add('bounce');
+    } else if (showFirst) {
+      container.classList.add('sway-left');
+    } else {
+      container.classList.add('sway-right');
+    }
+  }
+
+  // Start animation immediately
+  discoBg.classList.add('active');
+  setInterval(doBeat, beatMs / 2);
+
+  // Try autoplay music
+  music.play().then(() => { musicStarted = true; }).catch(() => {});
+
+  // If autoplay blocked, start music on first interaction
+  function tryPlayMusic() {
+    if (!musicStarted) {
+      music.play().then(() => { musicStarted = true; }).catch(() => {});
+    }
+  }
+  document.addEventListener('click', tryPlayMusic, { once: true });
+  document.addEventListener('touchstart', tryPlayMusic, { once: true });
+  document.addEventListener('scroll', tryPlayMusic, { once: true });
+  document.addEventListener('keydown', tryPlayMusic, { once: true });
+</script>
+</body>
+</html>
