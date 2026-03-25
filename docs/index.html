@@ -96,6 +96,25 @@
     0% { transform: translate(0, 0) scale(1); }
     100% { transform: translate(30px, -20px) scale(1.2); }
   }
+
+  #mute-btn {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 50;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255,255,255,0.15);
+    backdrop-filter: blur(10px);
+    cursor: pointer;
+    font-size: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    -webkit-tap-highlight-color: transparent;
+  }
 </style>
 </head>
 <body>
@@ -112,6 +131,8 @@
 </div>
 
 <audio id="music" src="music.mp3" preload="auto" loop autoplay></audio>
+
+<button id="mute-btn" aria-label="Mute/Unmute">🔊</button>
 
 <script>
   const photo1 = document.getElementById('photo1');
@@ -159,6 +180,14 @@
   // Fallback: any user interaction starts music
   ['click','touchstart','touchend','scroll','keydown','mousemove'].forEach(evt => {
     document.addEventListener(evt, tryPlay, { once: true });
+  });
+
+  // Mute button
+  const muteBtn = document.getElementById('mute-btn');
+  muteBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    music.muted = !music.muted;
+    muteBtn.textContent = music.muted ? '🔇' : '🔊';
   });
 </script>
 </body>
