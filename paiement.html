@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Commande Gazon - Les Gazons d'Île-de-France</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: #f0f4f0;
+    color: #1a2e1a;
+    min-height: 100vh;
+  }
+
+  /* ── Header ── */
+  .header {
+    background: #fff;
+    border-bottom: 1px solid #e0e8e0;
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  }
+  .header-logo {
+    width: 44px; height: 44px;
+    background: #2d6a2d;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 20px; font-weight: 700;
+  }
+  .header-text h1 { font-size: 16px; font-weight: 700; color: #1a3a1a; }
+  .header-text p { font-size: 12px; color: #6b8f6b; font-weight: 500; }
+
+  /* ── Container ── */
+  .container {
+    max-width: 520px;
+    margin: 0 auto;
+    padding: 24px 16px 100px;
+  }
+
+  /* ── Steps indicator ── */
+  .steps {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    margin-bottom: 28px;
+  }
+  .step-item {
+    display: flex; align-items: center; gap: 8px;
+  }
+  .step-dot {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 600;
+    background: #e0e8e0; color: #7a9a7a;
+    transition: all .3s ease;
+  }
+  .step-dot.active { background: #2d6a2d; color: #fff; }
+  .step-dot.done { background: #4caf50; color: #fff; }
+  .step-label {
+    font-size: 12px; font-weight: 500; color: #7a9a7a;
+    transition: color .3s;
+  }
+  .step-label.active { color: #1a3a1a; }
+  .step-line {
+    width: 40px; height: 2px;
+    background: #d0dcd0;
+    margin: 0 6px;
+    border-radius: 2px;
+    transition: background .3s;
+  }
+  .step-line.done { background: #4caf50; }
+
+  /* ── Card ── */
+  .card {
+    background: #fff;
+    border-radius: 16px;
+    padding: 28px 24px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    margin-bottom: 16px;
+  }
+  .card h2 {
+    font-size: 20px; font-weight: 700; margin-bottom: 4px;
+    color: #1a3a1a;
+  }
+  .card .subtitle {
+    font-size: 13px; color: #6b8f6b; margin-bottom: 20px;
+  }
+
+  /* ── Form elements ── */
+  label {
+    display: block;
+    font-size: 13px; font-weight: 600; color: #3a5a3a;
+    margin-bottom: 6px;
+  }
+  input, select, textarea {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1.5px solid #d0dcd0;
+    border-radius: 10px;
+    font-size: 15px;
+    font-family: inherit;
+    color: #1a3a1a;
+    background: #fafcfa;
+    transition: border-color .2s, box-shadow .2s;
+    outline: none;
+    margin-bottom: 16px;
+  }
+  input:focus, select:focus, textarea:focus {
+    border-color: #2d6a2d;
+    box-shadow: 0 0 0 3px rgba(45,106,45,0.12);
+    background: #fff;
+  }
+  input::placeholder { color: #a0bca0; }
+
+  /* ── Quantity selector ── */
+  .qty-selector {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin-bottom: 16px;
+  }
+  .qty-btn {
+    width: 48px; height: 48px;
+    border: 1.5px solid #d0dcd0;
+    background: #f5f9f5;
+    font-size: 22px; font-weight: 600;
+    color: #2d6a2d;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all .15s;
+    user-select: none;
+  }
+  .qty-btn:first-child { border-radius: 10px 0 0 10px; }
+  .qty-btn:last-child { border-radius: 0 10px 10px 0; }
+  .qty-btn:hover { background: #e8f0e8; }
+  .qty-btn:active { background: #d0e0d0; }
+  .qty-input {
+    width: 100px; height: 48px;
+    border: 1.5px solid #d0dcd0;
+    border-left: none; border-right: none;
+    border-radius: 0;
+    text-align: center;
+    font-size: 18px; font-weight: 600;
+    margin-bottom: 0;
+    -moz-appearance: textfield;
+  }
+  .qty-input::-webkit-inner-spin-button,
+  .qty-input::-webkit-outer-spin-button { -webkit-appearance: none; }
+  .qty-unit {
+    font-size: 13px; color: #6b8f6b; margin-left: 12px; font-weight: 500;
+  }
+
+  /* ── Price display ── */
+  .price-box {
+    background: linear-gradient(135deg, #f0f7f0, #e4f0e4);
+    border-radius: 12px;
+    padding: 16px 18px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    border: 1px solid #c8dcc8;
+  }
+  .price-label { font-size: 14px; color: #3a6a3a; font-weight: 500; }
+  .price-value { font-size: 22px; font-weight: 700; color: #1a5a1a; }
+  .price-detail {
+    font-size: 12px; color: #6b8f6b;
+    text-align: right;
+    margin-bottom: 20px;
+  }
+
+  /* ── Presets ── */
+  .presets {
+    display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px;
+  }
+  .preset {
+    padding: 8px 14px;
+    border-radius: 20px;
+    border: 1.5px solid #d0dcd0;
+    background: #fafcfa;
+    font-size: 13px; font-weight: 500;
+    color: #3a6a3a;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .preset:hover { border-color: #2d6a2d; background: #f0f7f0; }
+  .preset.active { background: #2d6a2d; color: #fff; border-color: #2d6a2d; }
+
+  /* ── Row ── */
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  /* ── Calendar ── */
+  .calendar {
+    background: #fafcfa;
+    border-radius: 12px;
+    border: 1.5px solid #d0dcd0;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .cal-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 12px;
+  }
+  .cal-header span { font-size: 15px; font-weight: 600; color: #1a3a1a; }
+  .cal-nav {
+    width: 32px; height: 32px; border: none; background: #e8f0e8;
+    border-radius: 8px; cursor: pointer; font-size: 16px; color: #2d6a2d;
+    display: flex; align-items: center; justify-content: center;
+    transition: background .15s;
+  }
+  .cal-nav:hover { background: #d0e0d0; }
+  .cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+    text-align: center;
+  }
+  .cal-day-name {
+    font-size: 11px; font-weight: 600; color: #7a9a7a;
+    padding: 4px 0;
+  }
+  .cal-day {
+    width: 100%; aspect-ratio: 1;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 500;
+    border-radius: 8px;
+    cursor: pointer;
+    color: #3a5a3a;
+    transition: all .15s;
+  }
+  .cal-day:hover:not(.disabled):not(.empty) { background: #e8f0e8; }
+  .cal-day.selected { background: #2d6a2d; color: #fff; font-weight: 600; }
+  .cal-day.disabled { color: #c0d0c0; cursor: default; }
+  .cal-day.empty { cursor: default; }
+  .cal-day.today { border: 1.5px solid #2d6a2d; }
+  .cal-info {
+    margin-top: 10px; padding: 10px 12px;
+    background: #fff8e1; border-radius: 8px; border: 1px solid #ffe0a0;
+    font-size: 12px; color: #8a6d00;
+    display: none;
+  }
+  .cal-info.visible { display: block; }
+
+  /* ── Buttons ── */
+  .btn {
+    width: 100%;
+    padding: 14px 24px;
+    border: none;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all .2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .btn-primary {
+    background: #2d6a2d;
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(45,106,45,0.25);
+  }
+  .btn-primary:hover { background: #246024; transform: translateY(-1px); }
+  .btn-primary:active { transform: translateY(0); }
+  .btn-primary:disabled {
+    background: #a0c0a0; cursor: default; transform: none;
+    box-shadow: none;
+  }
+  .btn-secondary {
+    background: #f0f4f0;
+    color: #2d6a2d;
+    border: 1.5px solid #d0dcd0;
+  }
+  .btn-secondary:hover { background: #e4ece4; }
+  .btn-group { display: flex; gap: 10px; margin-top: 8px; }
+  .btn-group .btn { flex: 1; }
+
+  /* ── Summary ── */
+  .summary-row {
+    display: flex; justify-content: space-between;
+    padding: 10px 0;
+    font-size: 14px;
+    border-bottom: 1px solid #eef4ee;
+  }
+  .summary-row:last-child { border: none; }
+  .summary-row .label { color: #5a7a5a; }
+  .summary-row .value { font-weight: 600; color: #1a3a1a; }
+  .summary-total {
+    display: flex; justify-content: space-between;
+    padding: 14px 0 0;
+    margin-top: 4px;
+    border-top: 2px solid #2d6a2d;
+    font-size: 18px; font-weight: 700;
+    color: #1a3a1a;
+  }
+
+  /* ── Payment mock ── */
+  .payment-methods {
+    display: flex; gap: 10px; margin-bottom: 20px;
+  }
+  .pay-method {
+    flex: 1;
+    padding: 14px;
+    border: 1.5px solid #d0dcd0;
+    border-radius: 10px;
+    text-align: center;
+    cursor: pointer;
+    transition: all .15s;
+    background: #fafcfa;
+  }
+  .pay-method:hover { border-color: #2d6a2d; }
+  .pay-method.active { border-color: #2d6a2d; background: #f0f7f0; box-shadow: 0 0 0 3px rgba(45,106,45,0.1); }
+  .pay-method .icon { font-size: 24px; margin-bottom: 4px; }
+  .pay-method .name { font-size: 12px; font-weight: 600; color: #3a5a3a; }
+
+  .card-inputs {
+    background: #fafcfa;
+    border: 1.5px solid #d0dcd0;
+    border-radius: 12px;
+    padding: 18px;
+    margin-bottom: 20px;
+  }
+  .card-inputs input { background: #fff; }
+  .card-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  /* ── Success ── */
+  .success-screen {
+    text-align: center;
+    padding: 40px 20px;
+  }
+  .success-icon {
+    width: 80px; height: 80px;
+    background: linear-gradient(135deg, #4caf50, #2d6a2d);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 20px;
+    font-size: 40px; color: #fff;
+    animation: popIn .5s ease;
+  }
+  @keyframes popIn {
+    0% { transform: scale(0); }
+    60% { transform: scale(1.15); }
+    100% { transform: scale(1); }
+  }
+  .success-screen h2 { color: #1a5a1a; margin-bottom: 8px; }
+  .success-screen p { color: #5a7a5a; font-size: 14px; line-height: 1.5; }
+  .order-ref {
+    display: inline-block;
+    background: #f0f7f0;
+    border: 1px solid #c8dcc8;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 16px; font-weight: 700; color: #2d6a2d;
+    margin: 16px 0;
+    letter-spacing: 1px;
+  }
+
+  /* ── Slide transitions ── */
+  .page { display: none; animation: slideIn .35s ease; }
+  .page.active { display: block; }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(20px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  /* ── Delivery zone tag ── */
+  .zone-tag {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 12px; font-weight: 600;
+    margin-bottom: 16px;
+  }
+  .zone-tag.zone-1 { background: #e8f5e9; color: #2e7d32; }
+  .zone-tag.zone-2 { background: #fff8e1; color: #f57f17; }
+  .zone-tag.zone-3 { background: #fbe9e7; color: #d84315; }
+
+  /* ── Address suggestion ── */
+  .address-suggestions {
+    position: absolute;
+    top: 100%;
+    left: 0; right: 0;
+    background: #fff;
+    border: 1.5px solid #d0dcd0;
+    border-top: none;
+    border-radius: 0 0 10px 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    z-index: 10;
+    max-height: 200px;
+    overflow-y: auto;
+    display: none;
+  }
+  .address-suggestions.visible { display: block; }
+  .address-suggestion {
+    padding: 10px 14px;
+    font-size: 13px;
+    cursor: pointer;
+    border-bottom: 1px solid #f0f4f0;
+    color: #3a5a3a;
+  }
+  .address-suggestion:hover { background: #f0f7f0; }
+  .address-suggestion:last-child { border: none; }
+  .addr-wrap { position: relative; }
+
+  /* ── Responsive ── */
+  @media (max-width: 480px) {
+    .container { padding: 16px 12px 100px; }
+    .card { padding: 20px 16px; }
+    .form-row { grid-template-columns: 1fr; }
+    .step-label { display: none; }
+    .step-line { width: 24px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-logo">G</div>
+  <div class="header-text">
+    <h1>Les Gazons d'Île-de-France</h1>
+    <p>Commande &amp; Livraison</p>
+  </div>
+</div>
+
+<!-- Steps -->
+<div class="container">
+  <div class="steps">
+    <div class="step-item">
+      <div class="step-dot active" id="dot1">1</div>
+      <span class="step-label active" id="lbl1">Quantité</span>
+    </div>
+    <div class="step-line" id="line1"></div>
+    <div class="step-item">
+      <div class="step-dot" id="dot2">2</div>
+      <span class="step-label" id="lbl2">Livraison</span>
+    </div>
+    <div class="step-line" id="line2"></div>
+    <div class="step-item">
+      <div class="step-dot" id="dot3">3</div>
+      <span class="step-label" id="lbl3">Paiement</span>
+    </div>
+  </div>
+
+  <!-- ═══════════ PAGE 1 : Quantité ═══════════ -->
+  <div class="page active" id="page1">
+    <div class="card">
+      <h2>Votre gazon en rouleau</h2>
+      <p class="subtitle">Choisissez la surface à engazonner</p>
+
+      <label>Surface souhaitée</label>
+      <div class="qty-selector">
+        <button class="qty-btn" onclick="changeQty(-5)">−</button>
+        <input type="number" class="qty-input" id="qtyInput" value="50" min="20" max="2000" oninput="updatePrice()">
+        <button class="qty-btn" onclick="changeQty(5)">+</button>
+        <span class="qty-unit">m²</span>
+      </div>
+
+      <div class="presets">
+        <button class="preset" onclick="setQty(30)">30 m²</button>
+        <button class="preset active" onclick="setQty(50)">50 m²</button>
+        <button class="preset" onclick="setQty(100)">100 m²</button>
+        <button class="preset" onclick="setQty(200)">200 m²</button>
+        <button class="preset" onclick="setQty(500)">500 m²</button>
+      </div>
+
+      <div class="price-box">
+        <span class="price-label">Estimation gazon</span>
+        <span class="price-value" id="priceDisplay">150,00 €</span>
+      </div>
+      <p class="price-detail" id="priceDetail">50 m² × 3,00 €/m² TTC</p>
+
+      <label style="margin-top:8px">Type de gazon</label>
+      <select id="gazonType" onchange="updatePrice()">
+        <option value="standard" data-price="3">Gazon standard — 3,00 €/m²</option>
+        <option value="premium" data-price="4.5">Gazon premium résistant — 4,50 €/m²</option>
+        <option value="sport" data-price="5">Gazon sport / usage intensif — 5,00 €/m²</option>
+      </select>
+
+      <button class="btn btn-primary" onclick="goToPage(2)">
+        Continuer vers la livraison →
+      </button>
+    </div>
+  </div>
+
+  <!-- ═══════════ PAGE 2 : Adresse + Calendrier ═══════════ -->
+  <div class="page" id="page2">
+    <div class="card">
+      <h2>Adresse de livraison</h2>
+      <p class="subtitle">En Île-de-France uniquement</p>
+
+      <label>Adresse complète</label>
+      <div class="addr-wrap">
+        <input type="text" id="addressInput" placeholder="Ex: 12 rue de la Paix, 75002 Paris" oninput="onAddressInput()" autocomplete="off">
+        <div class="address-suggestions" id="addrSuggestions"></div>
+      </div>
+
+      <div id="zoneInfo"></div>
+
+      <div class="form-row">
+        <div>
+          <label>Complément</label>
+          <input type="text" id="complement" placeholder="Bât, digicode...">
+        </div>
+        <div>
+          <label>Téléphone</label>
+          <input type="tel" id="phone" placeholder="06 XX XX XX XX">
+        </div>
+      </div>
+
+      <label>Nom complet</label>
+      <input type="text" id="fullName" placeholder="Prénom Nom">
+
+      <label>Email</label>
+      <input type="email" id="email" placeholder="email@exemple.fr">
+    </div>
+
+    <div class="card" id="calendarCard" style="display:none">
+      <h2>Date de livraison</h2>
+      <p class="subtitle" id="calSubtitle">Choisissez un créneau disponible</p>
+
+      <div class="calendar" id="calendar"></div>
+
+      <div class="cal-info" id="calInfo"></div>
+    </div>
+
+    <div class="btn-group">
+      <button class="btn btn-secondary" onclick="goToPage(1)">← Retour</button>
+      <button class="btn btn-primary" id="btnToPayment" disabled onclick="goToPage(3)">
+        Continuer →
+      </button>
+    </div>
+  </div>
+
+  <!-- ═══════════ PAGE 3 : Récap + Paiement ═══════════ -->
+  <div class="page" id="page3">
+    <div class="card">
+      <h2>Récapitulatif</h2>
+      <p class="subtitle">Vérifiez votre commande</p>
+
+      <div id="summaryContent"></div>
+    </div>
+
+    <div class="card">
+      <h2>Paiement</h2>
+      <p class="subtitle">Démo — aucun paiement réel</p>
+
+      <div class="payment-methods">
+        <div class="pay-method active" onclick="selectPayMethod(this, 'cb')">
+          <div class="icon">💳</div>
+          <div class="name">Carte bancaire</div>
+        </div>
+        <div class="pay-method" onclick="selectPayMethod(this, 'virement')">
+          <div class="icon">🏦</div>
+          <div class="name">Virement</div>
+        </div>
+        <div class="pay-method" onclick="selectPayMethod(this, 'especes')">
+          <div class="icon">💶</div>
+          <div class="name">À la livraison</div>
+        </div>
+      </div>
+
+      <div class="card-inputs" id="cbInputs">
+        <label>Numéro de carte</label>
+        <input type="text" id="cardNumber" placeholder="1234  5678  9012  3456" maxlength="19" oninput="formatCard(this)">
+        <div class="card-row">
+          <div>
+            <label>Expiration</label>
+            <input type="text" placeholder="MM/AA" maxlength="5" oninput="formatExpiry(this)">
+          </div>
+          <div>
+            <label>CVV</label>
+            <input type="text" placeholder="123" maxlength="3">
+          </div>
+        </div>
+      </div>
+
+      <button class="btn btn-primary" id="btnPay" onclick="processPayment()">
+        🔒 Payer <span id="btnPayAmount"></span>
+      </button>
+    </div>
+
+    <div class="btn-group" style="margin-top:4px">
+      <button class="btn btn-secondary" onclick="goToPage(2)">← Retour</button>
+    </div>
+  </div>
+
+  <!-- ═══════════ PAGE 4 : Succès ═══════════ -->
+  <div class="page" id="page4">
+    <div class="card">
+      <div class="success-screen">
+        <div class="success-icon">✓</div>
+        <h2>Commande confirmée !</h2>
+        <p>Votre gazon sera livré à l'adresse indiquée.</p>
+        <div class="order-ref" id="orderRef">GZ-000000</div>
+        <p id="successDetails"></p>
+        <p style="margin-top:20px; font-size:13px; color:#7a9a7a;">
+          Un email de confirmation a été envoyé.<br>
+          Pour toute question : <strong>06 21 62 25 24</strong>
+        </p>
+        <button class="btn btn-primary" style="margin-top:24px" onclick="location.reload()">
+          Nouvelle commande
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── State ──
+let currentPage = 1;
+let selectedDate = null;
+let currentMonth = new Date().getMonth();
+let currentYear = new Date().getFullYear();
+let detectedZone = null; // 1, 2, 3
+let deliveryFee = 0;
+
+// ── Zones by department ──
+const ZONES = {
+  '75': { zone: 1, label: 'Paris', fee: 0, delayDays: 3 },
+  '92': { zone: 1, label: 'Hauts-de-Seine', fee: 0, delayDays: 3 },
+  '93': { zone: 1, label: 'Seine-Saint-Denis', fee: 0, delayDays: 3 },
+  '94': { zone: 1, label: 'Val-de-Marne', fee: 0, delayDays: 3 },
+  '91': { zone: 2, label: 'Essonne', fee: 50, delayDays: 4 },
+  '95': { zone: 2, label: "Val-d'Oise", fee: 50, delayDays: 4 },
+  '78': { zone: 2, label: 'Yvelines', fee: 50, delayDays: 4 },
+  '77': { zone: 1, label: 'Seine-et-Marne (siège)', fee: 0, delayDays: 2 },
+  '60': { zone: 3, label: 'Oise', fee: 80, delayDays: 5 },
+  '28': { zone: 3, label: 'Eure-et-Loir', fee: 80, delayDays: 5 },
+  '45': { zone: 3, label: 'Loiret', fee: 80, delayDays: 5 },
+  '27': { zone: 3, label: 'Eure', fee: 80, delayDays: 5 },
+};
+
+// ── Fake addresses for autocomplete demo ──
+const FAKE_ADDRESSES = [
+  '12 Rue de Rivoli, 75001 Paris',
+  '45 Avenue des Champs-Élysées, 75008 Paris',
+  '8 Boulevard Voltaire, 75011 Paris',
+  '23 Rue de la République, 92100 Boulogne-Billancourt',
+  '15 Avenue Jean Jaurès, 93200 Saint-Denis',
+  '7 Rue Victor Hugo, 94200 Ivry-sur-Seine',
+  '30 Rue de la Gare, 77410 Saint-Mesmès',
+  '5 Place du Marché, 91000 Évry-Courcouronnes',
+  '18 Rue Nationale, 95100 Argenteuil',
+  '42 Avenue de Paris, 78000 Versailles',
+  '10 Rue du Château, 77100 Meaux',
+  '55 Boulevard Haussmann, 75009 Paris',
+  '3 Allée des Tilleuls, 92400 Courbevoie',
+  '28 Rue de la Liberté, 93100 Montreuil',
+];
+
+// ── Quantity ──
+function changeQty(delta) {
+  const inp = document.getElementById('qtyInput');
+  let v = parseInt(inp.value) || 50;
+  v = Math.max(20, Math.min(2000, v + delta));
+  inp.value = v;
+  updatePresets(v);
+  updatePrice();
+}
+function setQty(v) {
+  document.getElementById('qtyInput').value = v;
+  updatePresets(v);
+  updatePrice();
+}
+function updatePresets(v) {
+  document.querySelectorAll('.preset').forEach(p => {
+    p.classList.toggle('active', parseInt(p.textContent) === v);
+  });
+}
+function getUnitPrice() {
+  const sel = document.getElementById('gazonType');
+  return parseFloat(sel.options[sel.selectedIndex].dataset.price);
+}
+function getQty() {
+  return Math.max(20, parseInt(document.getElementById('qtyInput').value) || 50);
+}
+function updatePrice() {
+  const qty = getQty();
+  const unit = getUnitPrice();
+  // Volume discount
+  let discount = 0;
+  if (qty >= 200) discount = 0.10;
+  else if (qty >= 100) discount = 0.05;
+  const finalUnit = unit * (1 - discount);
+  const total = qty * finalUnit;
+  document.getElementById('priceDisplay').textContent = formatEUR(total);
+  let detail = `${qty} m² × ${formatEUR(finalUnit)}/m² TTC`;
+  if (discount > 0) detail += ` (−${Math.round(discount*100)}% volume)`;
+  document.getElementById('priceDetail').textContent = detail;
+}
+
+// ── Address autocomplete (mock) ──
+function onAddressInput() {
+  const val = document.getElementById('addressInput').value.trim().toLowerCase();
+  const box = document.getElementById('addrSuggestions');
+  if (val.length < 3) { box.classList.remove('visible'); return; }
+  const matches = FAKE_ADDRESSES.filter(a => a.toLowerCase().includes(val)).slice(0, 5);
+  if (matches.length === 0) { box.classList.remove('visible'); return; }
+  box.innerHTML = matches.map(a => `<div class="address-suggestion" onclick="selectAddress('${a}')">${a}</div>`).join('');
+  box.classList.add('visible');
+}
+function selectAddress(addr) {
+  document.getElementById('addressInput').value = addr;
+  document.getElementById('addrSuggestions').classList.remove('visible');
+  detectZone(addr);
+}
+function detectZone(addr) {
+  const match = addr.match(/\b(\d{5})\b/);
+  if (!match) return;
+  const dept = match[1].substring(0, 2);
+  const info = ZONES[dept];
+  const zi = document.getElementById('zoneInfo');
+  if (!info) {
+    zi.innerHTML = `<div class="zone-tag zone-3">⚠️ Zone hors couverture — contactez-nous au 06 21 62 25 24</div>`;
+    detectedZone = null;
+    document.getElementById('calendarCard').style.display = 'none';
+    return;
+  }
+  detectedZone = info;
+  deliveryFee = info.fee;
+  // Volume: free delivery above 150m²
+  if (getQty() >= 150) deliveryFee = 0;
+
+  const zoneClass = `zone-${info.zone}`;
+  let feeText = deliveryFee === 0 ? 'Livraison offerte' : `Livraison : ${formatEUR(deliveryFee)}`;
+  zi.innerHTML = `<div class="zone-tag ${zoneClass}">📍 ${info.label} — Zone ${info.zone} — ${feeText}</div>`;
+
+  // Show calendar
+  document.getElementById('calendarCard').style.display = 'block';
+  const minDelay = getMinDelay();
+  document.getElementById('calSubtitle').textContent = `Livraison possible à partir de J+${minDelay} jours`;
+  renderCalendar();
+}
+
+function getMinDelay() {
+  if (!detectedZone) return 5;
+  let d = detectedZone.delayDays;
+  const qty = getQty();
+  if (qty > 300) d += 2;
+  else if (qty > 100) d += 1;
+  return d;
+}
+
+// ── Calendar ──
+function renderCalendar() {
+  const cal = document.getElementById('calendar');
+  const today = new Date();
+  const minDate = new Date();
+  minDate.setDate(minDate.getDate() + getMinDelay());
+
+  const months = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+  const dayNames = ['Lu','Ma','Me','Je','Ve','Sa','Di'];
+
+  const firstDay = new Date(currentYear, currentMonth, 1);
+  let startDay = firstDay.getDay() - 1;
+  if (startDay < 0) startDay = 6;
+  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+
+  let html = `
+    <div class="cal-header">
+      <button class="cal-nav" onclick="navMonth(-1)">‹</button>
+      <span>${months[currentMonth]} ${currentYear}</span>
+      <button class="cal-nav" onclick="navMonth(1)">›</button>
+    </div>
+    <div class="cal-grid">
+  `;
+  dayNames.forEach(d => html += `<div class="cal-day-name">${d}</div>`);
+
+  for (let i = 0; i < startDay; i++) html += `<div class="cal-day empty"></div>`;
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const date = new Date(currentYear, currentMonth, d);
+    const dayOfWeek = date.getDay();
+    const isPast = date < new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const isTooSoon = date < minDate;
+    const isSunday = dayOfWeek === 0;
+    const isDisabled = isPast || isTooSoon || isSunday;
+    const isToday = date.toDateString() === today.toDateString();
+    const isSelected = selectedDate && date.toDateString() === selectedDate.toDateString();
+
+    let cls = 'cal-day';
+    if (isDisabled) cls += ' disabled';
+    if (isToday) cls += ' today';
+    if (isSelected) cls += ' selected';
+
+    const onclick = isDisabled ? '' : `onclick="pickDate(${currentYear},${currentMonth},${d})"`;
+    html += `<div class="${cls}" ${onclick}>${d}</div>`;
+  }
+
+  html += '</div>';
+  cal.innerHTML = html;
+}
+function navMonth(delta) {
+  currentMonth += delta;
+  if (currentMonth > 11) { currentMonth = 0; currentYear++; }
+  if (currentMonth < 0) { currentMonth = 11; currentYear--; }
+  renderCalendar();
+}
+function pickDate(y, m, d) {
+  selectedDate = new Date(y, m, d);
+  renderCalendar();
+
+  const dayOfWeek = selectedDate.getDay();
+  const info = document.getElementById('calInfo');
+  if (dayOfWeek === 6) {
+    info.textContent = '⚠️ Livraison le samedi : supplément de 30 € applicable.';
+    info.classList.add('visible');
+  } else {
+    info.classList.remove('visible');
+  }
+  checkPage2Valid();
+}
+
+// ── Validation ──
+function checkPage2Valid() {
+  const addr = document.getElementById('addressInput').value.trim();
+  const name = document.getElementById('fullName').value.trim();
+  const phone = document.getElementById('phone').value.trim();
+  const valid = addr.length > 5 && name.length > 2 && phone.length > 5 && selectedDate && detectedZone;
+  document.getElementById('btnToPayment').disabled = !valid;
+}
+document.addEventListener('input', () => { if (currentPage === 2) checkPage2Valid(); });
+
+// ── Navigation ──
+function goToPage(n) {
+  document.getElementById(`page${currentPage}`).classList.remove('active');
+  currentPage = n;
+  document.getElementById(`page${currentPage}`).classList.add('active');
+
+  // Update steps
+  for (let i = 1; i <= 3; i++) {
+    const dot = document.getElementById(`dot${i}`);
+    const lbl = document.getElementById(`lbl${i}`);
+    dot.className = 'step-dot' + (i === n ? ' active' : (i < n ? ' done' : ''));
+    if (i < n) dot.innerHTML = '✓';
+    else dot.innerHTML = i;
+    lbl.className = 'step-label' + (i <= n ? ' active' : '');
+  }
+  document.getElementById('line1').className = 'step-line' + (n >= 2 ? ' done' : '');
+  document.getElementById('line2').className = 'step-line' + (n >= 3 ? ' done' : '');
+
+  if (n === 3) buildSummary();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ── Summary ──
+function buildSummary() {
+  const qty = getQty();
+  const unit = getUnitPrice();
+  let discount = 0;
+  if (qty >= 200) discount = 0.10;
+  else if (qty >= 100) discount = 0.05;
+  const finalUnit = unit * (1 - discount);
+  const gazonTotal = qty * finalUnit;
+
+  if (getQty() >= 150) deliveryFee = 0;
+  let saturdaySup = 0;
+  if (selectedDate && selectedDate.getDay() === 6) saturdaySup = 30;
+
+  const total = gazonTotal + deliveryFee + saturdaySup;
+
+  const typeName = document.getElementById('gazonType').options[document.getElementById('gazonType').selectedIndex].text.split('—')[0].trim();
+  const dateStr = selectedDate ? selectedDate.toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : '';
+
+  let html = `
+    <div class="summary-row"><span class="label">${typeName}</span><span class="value">${qty} m²</span></div>
+    <div class="summary-row"><span class="label">Prix unitaire</span><span class="value">${formatEUR(finalUnit)}/m²${discount > 0 ? ' <small style="color:#4caf50">(−' + Math.round(discount*100) + '%)</small>' : ''}</span></div>
+    <div class="summary-row"><span class="label">Sous-total gazon</span><span class="value">${formatEUR(gazonTotal)}</span></div>
+    <div class="summary-row"><span class="label">Livraison — ${detectedZone ? detectedZone.label : ''}</span><span class="value">${deliveryFee === 0 ? 'Offerte' : formatEUR(deliveryFee)}</span></div>
+    ${saturdaySup > 0 ? `<div class="summary-row"><span class="label">Supplément samedi</span><span class="value">${formatEUR(saturdaySup)}</span></div>` : ''}
+    <div class="summary-row"><span class="label">📅 Livraison</span><span class="value">${dateStr}</span></div>
+    <div class="summary-row"><span class="label">📍 Adresse</span><span class="value" style="text-align:right;max-width:200px">${document.getElementById('addressInput').value}</span></div>
+    <div class="summary-total"><span>Total TTC</span><span>${formatEUR(total)}</span></div>
+  `;
+  document.getElementById('summaryContent').innerHTML = html;
+  document.getElementById('btnPayAmount').textContent = formatEUR(total);
+}
+
+// ── Payment methods ──
+function selectPayMethod(el, method) {
+  document.querySelectorAll('.pay-method').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('cbInputs').style.display = method === 'cb' ? 'block' : 'none';
+}
+
+// ── Format card input ──
+function formatCard(inp) {
+  let v = inp.value.replace(/\D/g, '').substring(0, 16);
+  inp.value = v.replace(/(.{4})/g, '$1  ').trim();
+}
+function formatExpiry(inp) {
+  let v = inp.value.replace(/\D/g, '').substring(0, 4);
+  if (v.length >= 2) v = v.substring(0,2) + '/' + v.substring(2);
+  inp.value = v;
+}
+
+// ── Process payment (demo) ──
+function processPayment() {
+  const btn = document.getElementById('btnPay');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Traitement en cours...';
+
+  setTimeout(() => {
+    const ref = 'GZ-' + String(Math.floor(100000 + Math.random() * 900000));
+    document.getElementById('orderRef').textContent = ref;
+
+    const dateStr = selectedDate ? selectedDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '';
+    document.getElementById('successDetails').innerHTML = `
+      <strong>${getQty()} m²</strong> de gazon en rouleau<br>
+      Livraison le <strong>${dateStr}</strong><br>
+      à <strong>${document.getElementById('addressInput').value}</strong>
+    `;
+
+    goToPage(4);
+  }, 2000);
+}
+
+// ── Helpers ──
+function formatEUR(n) {
+  return n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+}
+
+// Close suggestions on outside click
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.addr-wrap')) {
+    document.getElementById('addrSuggestions').classList.remove('visible');
+  }
+});
+
+// Init
+updatePrice();
+</script>
+</body>
+</html>
