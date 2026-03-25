@@ -111,9 +111,7 @@
   <img id="photo2" src="photo2.jpg" alt="Dance 2">
 </div>
 
-<audio id="music" preload="auto" loop autoplay>
-  <source src="music.mp3" type="audio/mpeg">
-</audio>
+<audio id="music" src="music.mp3" preload="auto" loop autoplay></audio>
 
 <script>
   const photo1 = document.getElementById('photo1');
@@ -149,33 +147,18 @@
   discoBg.classList.add('active');
   setInterval(doBeat, beatMs / 2);
 
-  // Multiple strategies to force autoplay
-  function forcePlay() {
+  // Try autoplay
+  function tryPlay() {
     if (musicStarted) return;
-    // Strategy 1: direct play
     music.play().then(() => { musicStarted = true; }).catch(() => {});
-    // Strategy 2: Web Audio API unlock
-    try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      const src = ctx.createMediaElementSource(music);
-      src.connect(ctx.destination);
-      ctx.resume().then(() => {
-        music.play().then(() => { musicStarted = true; }).catch(() => {});
-      });
-    } catch(e) {}
   }
 
-  forcePlay();
-  window.addEventListener('load', forcePlay);
+  tryPlay();
+  window.addEventListener('load', tryPlay);
 
   // Fallback: any user interaction starts music
-  function tryPlayMusic() {
-    if (!musicStarted) {
-      music.play().then(() => { musicStarted = true; }).catch(() => {});
-    }
-  }
   ['click','touchstart','touchend','scroll','keydown','mousemove'].forEach(evt => {
-    document.addEventListener(evt, tryPlayMusic, { once: true });
+    document.addEventListener(evt, tryPlay, { once: true });
   });
 </script>
 </body>
