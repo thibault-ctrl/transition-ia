@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Dance!</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow: hidden;
+    font-family: 'Arial Black', Arial, sans-serif;
+  }
+
+  #dance-container {
+    position: relative;
+    width: 100%;
+    max-width: 500px;
+    aspect-ratio: 2000 / 2777;
+  }
+
+  #dance-container img {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: opacity 0.08s ease;
+  }
+
+  #photo1 { opacity: 1; }
+  #photo2 { opacity: 0; }
+
+  #play-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #play-overlay .play-btn {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    background: #1db954;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+
+  #play-overlay .play-btn::after {
+    content: '';
+    display: block;
+    width: 0;
+    height: 0;
+    border-style: solid;
+    border-width: 20px 0 20px 35px;
+    border-color: transparent transparent transparent #fff;
+    margin-left: 5px;
+  }
+
+  #play-overlay p {
+    color: #fff;
+    margin-top: 20px;
+    font-size: 18px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(29,185,84,0.7); }
+    50% { transform: scale(1.08); box-shadow: 0 0 30px 10px rgba(29,185,84,0.3); }
+  }
+
+  .disco-bg {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.5s;
+  }
+
+  .disco-bg.active { opacity: 1; }
+
+  .disco-light {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.4;
+    animation: discoMove 2s ease-in-out infinite alternate;
+  }
+
+  .disco-light:nth-child(1) {
+    width: 300px; height: 300px;
+    background: #ff006e;
+    top: -50px; left: -50px;
+    animation-duration: 2.5s;
+  }
+  .disco-light:nth-child(2) {
+    width: 250px; height: 250px;
+    background: #3a86ff;
+    bottom: -30px; right: -30px;
+    animation-duration: 3s;
+    animation-delay: 0.5s;
+  }
+  .disco-light:nth-child(3) {
+    width: 200px; height: 200px;
+    background: #ffbe0b;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    animation-duration: 1.8s;
+    animation-delay: 1s;
+  }
+
+  @keyframes discoMove {
+    0% { transform: translate(0, 0) scale(1); }
+    100% { transform: translate(30px, -20px) scale(1.2); }
+  }
+</style>
+</head>
+<body>
+
+<div class="disco-bg" id="discoBg">
+  <div class="disco-light"></div>
+  <div class="disco-light"></div>
+  <div class="disco-light"></div>
+</div>
+
+<div id="dance-container">
+  <img id="photo1" src="photo1.jpg" alt="Dance 1">
+  <img id="photo2" src="photo2.jpg" alt="Dance 2">
+</div>
+
+<audio id="music" preload="auto" loop>
+  <source src="music.mp3" type="audio/mpeg">
+</audio>
+
+<div id="play-overlay">
+  <div class="play-btn"></div>
+  <p>Tap to dance!</p>
+</div>
+
+<script>
+  const photo1 = document.getElementById('photo1');
+  const photo2 = document.getElementById('photo2');
+  const music = document.getElementById('music');
+  const overlay = document.getElementById('play-overlay');
+  const discoBg = document.getElementById('discoBg');
+
+  let dancing = false;
+  let intervalId = null;
+  let showFirst = true;
+  const BPM = 105;
+  const beatMs = (60 / BPM) * 1000;
+
+  function togglePhoto() {
+    showFirst = !showFirst;
+    photo1.style.opacity = showFirst ? '1' : '0';
+    photo2.style.opacity = showFirst ? '0' : '1';
+  }
+
+  function startDance() {
+    if (dancing) return;
+    dancing = true;
+    overlay.style.display = 'none';
+    discoBg.classList.add('active');
+    music.play();
+    intervalId = setInterval(togglePhoto, beatMs / 2);
+  }
+
+  overlay.addEventListener('click', startDance);
+  overlay.addEventListener('touchend', function(e) {
+    e.preventDefault();
+    startDance();
+  });
+
+  // Try autoplay
+  music.play().then(() => {
+    dancing = true;
+    overlay.style.display = 'none';
+    discoBg.classList.add('active');
+    intervalId = setInterval(togglePhoto, beatMs / 2);
+  }).catch(() => {
+    // Autoplay blocked, show overlay
+  });
+</script>
+</body>
+</html>
