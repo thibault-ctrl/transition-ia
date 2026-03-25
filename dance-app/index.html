@@ -101,39 +101,48 @@
     position: fixed;
     inset: 0;
     z-index: 200;
-    background: rgba(0,0,0,0.6);
+    background: rgba(0,0,0,0.85);
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
   }
 
-  #start-overlay .play-circle {
-    width: 80px;
-    height: 80px;
+  #start-overlay .play-btn {
+    width: 100px;
+    height: 100px;
     border-radius: 50%;
-    background: rgba(255,255,255,0.2);
-    backdrop-filter: blur(10px);
+    background: #1db954;
     display: flex;
     align-items: center;
     justify-content: center;
     animation: pulse 1.5s ease-in-out infinite;
   }
 
-  #start-overlay .play-circle::after {
+  #start-overlay .play-btn::after {
     content: '';
+    display: block;
     width: 0;
     height: 0;
     border-style: solid;
-    border-width: 15px 0 15px 26px;
+    border-width: 20px 0 20px 35px;
     border-color: transparent transparent transparent #fff;
-    margin-left: 4px;
+    margin-left: 5px;
+  }
+
+  #start-overlay p {
+    color: #fff;
+    margin-top: 20px;
+    font-size: 18px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
   }
 
   @keyframes pulse {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.1); }
+    0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(29,185,84,0.7); }
+    50% { transform: scale(1.08); box-shadow: 0 0 30px 10px rgba(29,185,84,0.3); }
   }
 
   #mute-btn {
@@ -169,9 +178,12 @@
   <img id="photo2" src="photo2.jpg" alt="Dance 2">
 </div>
 
-<audio id="music" src="music.mp3" preload="auto" loop autoplay></audio>
+<audio id="music" src="music.mp3" preload="auto" loop></audio>
 
-<div id="start-overlay"><div class="play-circle"></div></div>
+<div id="start-overlay">
+  <div class="play-btn"></div>
+  <p>Tap to dance!</p>
+</div>
 
 <button id="mute-btn" aria-label="Mute/Unmute">🔊</button>
 
@@ -181,10 +193,12 @@
   const music = document.getElementById('music');
   const discoBg = document.getElementById('discoBg');
   const container = document.getElementById('dance-container');
+  const overlay = document.getElementById('start-overlay');
+  const muteBtn = document.getElementById('mute-btn');
 
+  let dancing = false;
   let showFirst = true;
   let beatCount = 0;
-  let musicStarted = false;
   const BPM = 105;
   const beatMs = (60 / BPM) * 1000;
 
@@ -205,36 +219,22 @@
     }
   }
 
-  // Start animation immediately
-  discoBg.classList.add('active');
-  setInterval(doBeat, beatMs / 2);
-
-  const overlay = document.getElementById('start-overlay');
-
-  // Try autoplay - if it works, hide overlay
-  music.play().then(() => {
-    musicStarted = true;
+  function startDance() {
+    if (dancing) return;
+    dancing = true;
     overlay.style.display = 'none';
-  }).catch(() => {
-    // Autoplay blocked - show overlay, wait for tap
-  });
-
-  function startMusic() {
-    if (musicStarted) return;
-    music.play().then(() => {
-      musicStarted = true;
-      overlay.style.display = 'none';
-    }).catch(() => {});
+    discoBg.classList.add('active');
+    music.play();
+    setInterval(doBeat, beatMs / 2);
   }
 
-  overlay.addEventListener('click', startMusic);
+  overlay.addEventListener('click', startDance);
   overlay.addEventListener('touchend', function(e) {
     e.preventDefault();
-    startMusic();
+    startDance();
   });
 
   // Mute button
-  const muteBtn = document.getElementById('mute-btn');
   muteBtn.addEventListener('click', function(e) {
     e.stopPropagation();
     music.muted = !music.muted;
