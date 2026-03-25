@@ -97,6 +97,45 @@
     100% { transform: translate(30px, -20px) scale(1.2); }
   }
 
+  #start-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: rgba(0,0,0,0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #start-overlay .play-circle {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.2);
+    backdrop-filter: blur(10px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+
+  #start-overlay .play-circle::after {
+    content: '';
+    width: 0;
+    height: 0;
+    border-style: solid;
+    border-width: 15px 0 15px 26px;
+    border-color: transparent transparent transparent #fff;
+    margin-left: 4px;
+  }
+
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+  }
+
   #mute-btn {
     position: fixed;
     bottom: 20px;
@@ -131,6 +170,8 @@
 </div>
 
 <audio id="music" src="music.mp3" preload="auto" loop autoplay></audio>
+
+<div id="start-overlay"><div class="play-circle"></div></div>
 
 <button id="mute-btn" aria-label="Mute/Unmute">🔊</button>
 
@@ -168,18 +209,28 @@
   discoBg.classList.add('active');
   setInterval(doBeat, beatMs / 2);
 
-  // Try autoplay
-  function tryPlay() {
+  const overlay = document.getElementById('start-overlay');
+
+  // Try autoplay - if it works, hide overlay
+  music.play().then(() => {
+    musicStarted = true;
+    overlay.style.display = 'none';
+  }).catch(() => {
+    // Autoplay blocked - show overlay, wait for tap
+  });
+
+  function startMusic() {
     if (musicStarted) return;
-    music.play().then(() => { musicStarted = true; }).catch(() => {});
+    music.play().then(() => {
+      musicStarted = true;
+      overlay.style.display = 'none';
+    }).catch(() => {});
   }
 
-  tryPlay();
-  window.addEventListener('load', tryPlay);
-
-  // Fallback: any user interaction starts music
-  ['click','touchstart','touchend','scroll','keydown','mousemove'].forEach(evt => {
-    document.addEventListener(evt, tryPlay, { once: true });
+  overlay.addEventListener('click', startMusic);
+  overlay.addEventListener('touchend', function(e) {
+    e.preventDefault();
+    startMusic();
   });
 
   // Mute button
