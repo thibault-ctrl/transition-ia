@@ -76,6 +76,13 @@ http.createServer((req, res) => {
     return proxyRequest(targetUrl, res);
   }
 
+  // PROXY: /proxy/pidf/page?handle=...  → Shopify product HTML page (to extract pot sizes)
+  if (pathname === '/proxy/pidf/page') {
+    const handle = parsedUrl.query.handle || '';
+    const targetUrl = `https://les-plantes-ile-de-france.com/products/${encodeURIComponent(handle)}`;
+    return proxyRequest(targetUrl, res);
+  }
+
   // PROXY: /proxy/fleur?q=...  → Fleur Pro search
   if (pathname === '/proxy/fleur') {
     const q = parsedUrl.query.q || '';

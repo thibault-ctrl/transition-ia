@@ -1679,18 +1679,40 @@ async function searchPIDF(searchTerms, potSize) {
         if (seenHandles.has(p.handle)) continue;
         seenHandles.add(p.handle);
 
-        // Fetch full product via proxy to get ALL variants (sizes)
+        // Fetch full product JSON + HTML page to get variants and pot sizes
         try {
+          // Get product JSON for variants
           const prodResp = await fetch(`/proxy/pidf/product?handle=${encodeURIComponent(p.handle)}`);
           const prodData = await prodResp.json();
           const product = prodData.product;
 
+          // Try to get HTML page to extract pot size mapping
+          let potSizeMap = {}; // variantId -> potSize in litres
+          try {
+            const pageResp = await fetch(`/proxy/pidf/page?handle=${encodeURIComponent(p.handle)}`);
+            const pageHtml = await pageResp.text();
+            // Extract variant ID -> pot size (litres) mapping from the page
+            // Shopify stores this as "variantId": "litres" in the page JS
+            for (const v of product.variants) {
+              // Look for pattern: "variantId": "number" (pot size in litres)
+              const regex = new RegExp('"' + v.id + '":\\s*"(\\d+)"');
+              const m = pageHtml.match(regex);
+              if (m) {
+                potSizeMap[v.id] = parseInt(m[1]);
+              }
+            }
+          } catch (e3) { /* page scrape failed, continue without pot sizes */ }
+
           for (const v of product.variants) {
             const variantTitle = v.title || '';
-            // Parse size from variant title (e.g. "60/80cm", "100/125cm", "3L")
-            const potMatch = variantTitle.match(/(\d+)\s*[Ll]/);
-            const ps = potMatch ? potMatch[1] : '';
-            const psNum = ps ? parseInt(ps) : 0;
+            // Get pot size: first from our scraped map, then from variant title
+            let psNum = potSizeMap[v.id] || 0;
+            let ps = psNum ? String(psNum) : '';
+            if (!psNum) {
+              const potMatch = variantTitle.match(/(\d+)\s*[Ll]/);
+              ps = potMatch ? potMatch[1] : '';
+              psNum = ps ? parseInt(ps) : 0;
+            }
 
             results.push({
               name: product.title,
@@ -1708,7 +1730,6 @@ async function searchPIDF(searchTerms, potSize) {
             });
           }
         } catch (e2) {
-          // Fallback: use basic info
           results.push({
             name: p.title,
             price: parseFloat(p.price),
@@ -1897,17 +1918,20 @@ async function generateQuote() {
 
     // STEP 2-4: Search all sources in parallel for each plant
     const allResults = {};
+    window._liveSearchResults = []; // Store live results for findProductInData
     for (const plant of plants) {
       showLoading(`🔍 Recherche: ${plant.botanicalName}...`);
 
       const [pidfResults, excelResults, fleurResults] = await Promise.all([
-        searchPIDF(plant.searchTerms, plant.potSize),
+        Promise.resolve([]), // PIDF is in preloaded suppliers, no live search needed
         Promise.resolve(searchExcelCatalogues(plant.searchTerms, plant.potSize)),
         searchFleurPro(plant.searchTerms)
       ]);
 
-      allResults[plant.botanicalName] = [...pidfResults, ...excelResults, ...fleurResults];
-      console.log(`${plant.botanicalName}: ${allResults[plant.botanicalName].length} results`);
+      const combined = [...pidfResults, ...excelResults, ...fleurResults];
+      allResults[plant.botanicalName] = combined;
+      window._liveSearchResults.push(...combined);
+      console.log(`${plant.botanicalName}: ${combined.length} results`);
     }
 
     // STEP 5: Claude compiles the best quote
@@ -1958,38 +1982,45 @@ async function generateQuote() {
       }
 
       // ENRICH: search ALL catalogues (including PIDF) for matching plants
-      // Extract the key botanical words from all matched names
-      const keyWords = new Set();
+      // Use the GENUS name (first word) as the primary search key
+      // e.g. "PHOTINIA X FRASERI RED ROBIN" -> genus = "photinia"
+      const genusNames = new Set();
+      for (const m of matches) {
+        const firstWord = normalize(m.name).split(' ').find(t => t.length > 3);
+        if (firstWord) genusNames.add(firstWord);
+      }
+      // Also extract secondary keywords (species/cultivar) for better filtering
+      const secondaryWords = new Set();
       for (const m of matches) {
         const tokens = normalize(m.name).split(' ').filter(t => t.length > 3);
-        tokens.forEach(t => keyWords.add(t));
+        tokens.slice(1).forEach(t => secondaryWords.add(t));
       }
-      // Remove generic words
-      ['grandiflora', 'compacta', 'nana', 'alba', 'rubra', 'aurea'].forEach(w => {
-        if (keyWords.size > 2) keyWords.delete(w);
-      });
 
       const allSuppliers = suppliers.filter(Boolean);
-      const keyWordsArr = [...keyWords];
 
       for (const sup of allSuppliers) {
         for (const plant of sup.data) {
           const plantNorm = normalize(plant.name);
-          // Match if the plant contains ANY of the key botanical words
-          let hits = 0;
-          for (const kw of keyWordsArr) {
-            if (plantNorm.includes(kw)) hits++;
+          // Must contain the genus name (e.g. "photinia")
+          let genusMatch = false;
+          for (const genus of genusNames) {
+            if (plantNorm.includes(genus)) { genusMatch = true; break; }
           }
-          // At least 1 key word must match, and at least 50% of key words
-          if (hits >= 1 && (keyWordsArr.length <= 2 || hits >= keyWordsArr.length * 0.5)) {
-            const exists = matches.find(x => x.name === plant.name && x.supplier === sup.name && x.potSize === plant.potSize);
-            if (!exists) {
-              matches.push({
-                ...plant,
-                supplier: sup.name,
-                score: 0.85
-              });
+          if (!genusMatch) continue;
+
+          // Genus matches - include this plant
+          const exists = matches.find(x => x.name === plant.name && x.supplier === sup.name && x.potSize === plant.potSize);
+          if (!exists) {
+            // Score based on how many secondary words match
+            let secHits = 0;
+            for (const sw of secondaryWords) {
+              if (plantNorm.includes(sw)) secHits++;
             }
+            matches.push({
+              ...plant,
+              supplier: sup.name,
+              score: secHits > 0 ? 0.85 : 0.7
+            });
           }
         }
       }
@@ -2053,6 +2084,24 @@ async function generateQuote() {
 
 // Find a product in our supplier data by name, supplier, potSize
 function findProductInData(matchedName, supplierName, potSize, price) {
+  // First search in live results (PIDF, Fleur Pro)
+  const live = window._liveSearchResults || [];
+  for (const plant of live) {
+    if (plant.name === matchedName) {
+      if (supplierName && plant.supplier !== supplierName) continue;
+      if (potSize && plant.potSizeNum && String(plant.potSizeNum) !== String(parseInt(potSize))) continue;
+      if (price && Math.abs(plant.price - price) > 0.5) continue;
+      return { ...plant, score: 1.0 };
+    }
+  }
+  // Relaxed live search by name only
+  for (const plant of live) {
+    if (plant.name === matchedName) {
+      return { ...plant, score: 0.95 };
+    }
+  }
+
+  // Then search in preloaded suppliers (Catalogue, Vannucci)
   const loadedSuppliers = suppliers.filter(Boolean);
   for (const sup of loadedSuppliers) {
     if (supplierName && sup.name !== supplierName) continue;
