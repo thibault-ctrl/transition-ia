@@ -809,7 +809,9 @@ body {
     <h1 class="page-title">Catalogues fournisseurs</h1>
     <p class="page-subtitle">Glissez-déposez vos fichiers Excel ou CSV pour charger les catalogues</p>
     <div style="margin-bottom:16px">
-      <button class="btn btn-secondary" onclick="refreshPIDF()" id="refreshPidfBtn">Actualiser PIDF (scraper le site)</button>
+      <button class="btn btn-secondary" onclick="refreshPIDF()" id="refreshPidfBtn">Actualiser PIDF</button>
+      <button class="btn btn-secondary" onclick="document.getElementById('fleurFileInput').click()" style="margin-left:8px">Actualiser Fleur Pro</button>
+      <input type="file" id="fleurFileInput" accept=".xls,.xlsx,.csv" style="display:none" onchange="refreshFleurPro(event)">
       <span id="refreshPidfStatus" style="margin-left:12px;font-size:13px;color:#6b6b6b;"></span>
     </div>
     <div class="suppliers-grid" id="suppliersGrid"></div>
@@ -2826,6 +2828,81 @@ async function refreshPIDF() {
     btn.disabled = false;
     btn.textContent = 'Actualiser PIDF (scraper le site)';
   }
+}
+
+// ============ REFRESH FLEUR PRO ============
+async function refreshFleurPro(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const status = document.getElementById('refreshPidfStatus');
+  status.textContent = 'Chargement du catalogue Fleur Pro...';
+
+  try {
+    const data = await readFileAsArrayBuffer(file);
+    const workbook = XLSX.read(data, { type: 'array' });
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+
+    status.textContent = 'Parsing ' + rows.length + ' lignes...';
+
+    const parsedData = [];
+    for (let r = 10; r < rows.length; r++) {
+      const row = rows[r];
+      const name = String(row[0] || '').trim();
+      const taille = String(row[1] || '').trim();
+      const price = parseFloat(row[3]) || 0;
+      if (!name || !taille || price <= 0) continue;
+
+      const potMatch = taille.match(/(\d+)\s*L/i);
+      const potSize = potMatch ? potMatch[1] : '';
+      const potSizeNum = potSize ? parseInt(potSize) : 0;
+      const heightMatch = taille.match(/(\d{2,3}\/[\d+]+)/);
+      const height = heightMatch ? heightMatch[1] : '';
+      const formeMatch = taille.match(/\b(TIGE|DT|DEMI-TIGE|BOULE|CONE|ESPALIER|PALISSE|ARC|PYRAMIDE|CHAMPIGNON|SPIRALE|PARASOL|TONNELLE)\b/i);
+      const forme = formeMatch ? formeMatch[1] : '';
+
+      parsedData.push({
+        name, price,
+        cond: taille.startsWith('C') ? 'C' : taille.startsWith('P') ? 'P' : '',
+        potSize, potSizeNum,
+        height: height || taille,
+        forme,
+        sizeInfo: taille
+      });
+    }
+
+    // Update or create Fleur Pro supplier
+    const fleurIdx = suppliers.findIndex(s => s && s.name === 'Fleur Pro');
+    const fleurSupplier = {
+      id: Date.now(),
+      name: 'Fleur Pro',
+      lastUpdate: new Date().toISOString(),
+      data: parsedData,
+      mapping: { nameCol: 'description', priceCol: 'prix' }
+    };
+
+    if (fleurIdx >= 0) {
+      suppliers[fleurIdx] = fleurSupplier;
+    } else {
+      const emptyIdx = suppliers.findIndex(s => !s);
+      if (emptyIdx >= 0) suppliers[emptyIdx] = fleurSupplier;
+      else suppliers.push(fleurSupplier);
+    }
+
+    saveToStorage();
+    renderSupplierCards();
+    updateSupplierCount();
+
+    status.textContent = '✅ Fleur Pro : ' + parsedData.length + ' produits chargés';
+    showToast('Fleur Pro actualisé : ' + parsedData.length + ' produits', 'success');
+  } catch (e) {
+    status.textContent = '❌ Erreur : ' + e.message;
+    showToast('Erreur Fleur Pro : ' + e.message, 'error');
+  }
+
+  event.target.value = '';
 }
 
 function switchSupplierGlobal(rowIndex, supIndex) {
