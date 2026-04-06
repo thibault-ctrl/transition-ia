@@ -1930,8 +1930,9 @@ RÈGLES:
 1. bestMatch = TOUJOURS un produit PIDF si trouvé, avec le litrage le plus proche demandé
 2. Si le client demande "photinia" sans préciser la variété, choisis "Photinia Red Robin (En touffe)" chez PIDF (c'est le best-seller)
 3. Si le client demande "lavande", choisis "Lavande bleue (Lavandula Angustifolia Hidcote)" chez PIDF
-4. Les prix PIDF sont des prix de VENTE. Les prix des autres fournisseurs sont des prix d'ACHAT.
-5. Propose au moins 2-3 alternatives d'autres fournisseurs
+4. Si PIDF n'a PAS du tout cette plante, choisis la variété la plus STANDARD/COURANTE du marché chez le fournisseur le MOINS CHER. Par exemple "Bougainvillea glabra Sanderiana" est plus standard que "Bougainvillea Fire Balls".
+5. Les prix PIDF sont des prix de VENTE. Les prix des autres fournisseurs sont des prix d'ACHAT.
+6. Propose au moins 2-3 alternatives d'autres fournisseurs
 
 RÉPONDS UNIQUEMENT en JSON:
 [{
@@ -2485,14 +2486,17 @@ function structureResults(results) {
         items: data.items
       };
     }).sort((a, b) => {
-      // PIDF varieties first, then by score, then by review count
+      // PIDF varieties first, then by score, then by popularity
       const aHasPidf = a.items.some(m => isPIDFSupplier(m.supplier)) ? 1 : 0;
       const bHasPidf = b.items.some(m => isPIDFSupplier(m.supplier)) ? 1 : 0;
       if (aHasPidf !== bHasPidf) return bHasPidf - aHasPidf;
       if (Math.abs(a.score - b.score) > 0.1) return b.score - a.score;
+      // Popularity: PIDF reviews first, then number of items (more items = more suppliers carry it = more popular)
       const aReviews = Math.max(...a.items.map(m => m.reviews || 0));
       const bReviews = Math.max(...b.items.map(m => m.reviews || 0));
-      return bReviews - aReviews;
+      if (aReviews !== bReviews) return bReviews - aReviews;
+      // More items across suppliers = more popular variety
+      return b.items.length - a.items.length;
     });
 
     // Within each variety: group by potSize, keep ALL suppliers per size
