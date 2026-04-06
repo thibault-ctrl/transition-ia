@@ -2001,7 +2001,7 @@ async function generateQuote() {
       const [pidfResults, excelResults, fleurResults] = await Promise.all([
         searchPIDFLive(plant.searchTerms),
         Promise.resolve(searchExcelCatalogues(plant.searchTerms, plant.potSize)),
-        searchFleurPro(plant.searchTerms)
+        Promise.resolve([]) // Fleur Pro is now in preloaded suppliers (Excel)
       ]);
 
       const combined = [...pidfResults, ...excelResults, ...fleurResults];
