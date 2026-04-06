@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PepiniQuote - Devis Pépinière</title>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <style>
 /* ============ RESET & BASE ============ */
@@ -1904,7 +1907,10 @@ async function generateQuote() {
     const quoteItems = await aiCompileQuote(plants, allResults);
 
     // Convert to display format + ENRICH with all suppliers from catalogues
-    const results = quoteItems.map(item => {
+    const results = quoteItems.map((item, itemIdx) => {
+      // Get the originally requested potSize from the AI identification step
+      const originalPlant = plants[itemIdx] || {};
+      const clientRequestedPotSize = originalPlant.potSize || 0;
       const matches = [];
 
       // Best match from Claude
@@ -1985,12 +1991,50 @@ async function generateQuote() {
         qty: item.qty || 1,
         matches,
         selected: 0,
-        aiPowered: true
+        aiPowered: true,
+        // Pass along requested size for pre-selection
+        _requestedPotSize: clientRequestedPotSize
       };
     });
 
+    // PRE-SELECT: after structuring, find the best variety+size matching what was asked
+    // This runs after renderResults structures the data
     hideLoading();
     renderResults(results);
+
+    // Now adjust selections based on requested litrage
+    const structured = window._structuredResults;
+    if (structured) {
+      let changed = false;
+      for (let i = 0; i < structured.length; i++) {
+        const r = structured[i];
+        const reqSize = results[i]._requestedPotSize || 0;
+        if (reqSize <= 0 || !r.varieties.length) continue;
+
+        // Find the best variety+size that has this potSize
+        let bestVar = -1, bestSize = -1, bestDist = 999;
+        for (let vi = 0; vi < r.varieties.length; vi++) {
+          for (let si = 0; si < r.varieties[vi].sizes.length; si++) {
+            const sg = r.varieties[vi].sizes[si];
+            if (sg.potSizeNum > 0) {
+              const dist = Math.abs(sg.potSizeNum - reqSize);
+              if (dist < bestDist) {
+                bestDist = dist;
+                bestVar = vi;
+                bestSize = si;
+              }
+            }
+          }
+        }
+        if (bestVar >= 0 && bestDist <= 2) {
+          results[i].selectedVariety = bestVar;
+          results[i].selectedSize = bestSize;
+          results[i].selectedSupplier = 0;
+          changed = true;
+        }
+      }
+      if (changed) renderResults(results);
+    }
 
   } catch (err) {
     hideLoading();
