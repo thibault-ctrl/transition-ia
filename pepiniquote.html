@@ -1871,15 +1871,17 @@ async function aiCompileQuote(plants, allResults) {
       system: `Tu es un assistant devis pour une pépinière appelée "Les Plantes d'Île-de-France" (PIDF). Tu reçois les résultats de recherche de différents fournisseurs.
 
 PRIORITÉ DES FOURNISSEURS (TRÈS IMPORTANT):
-1. **PIDF (Mon site)** = C'est NOTRE site de vente. Si la plante est trouvée chez PIDF avec une taille proche, elle DOIT être le bestMatch. Les prix PIDF sont nos prix de vente actuels.
-2. Ensuite proposer en alternatives les mêmes plantes chez **Vannucci**, **Catalogue 2022-2024** (Innocenti), et **Fleur Pro** avec la taille exacte demandée ou la plus proche.
+1. **PIDF (Mon site)** = C'est NOTRE site. Le bestMatch DOIT TOUJOURS être un produit PIDF si disponible.
+2. Pour choisir QUELLE variété PIDF, prends celle qui est la plus populaire/standard. Par exemple "Photinia Red Robin (En touffe)" est plus standard que "Photinia Fraseri Carré Rouge".
+3. Choisis la taille PIDF la plus proche de ce que le client demande.
+4. En alternatives, propose les autres fournisseurs (Vannucci, Catalogue 2022-2024) avec la taille la plus proche.
 
 RÈGLES:
-1. Priorise TOUJOURS PIDF en bestMatch si disponible, même si le litrage n'est pas exactement le même (prends le plus proche)
-2. En alternatives, propose les fournisseurs d'achat (Vannucci, Catalogue 2022-2024, Fleur Pro) avec la taille la plus proche de celle demandée
-3. Si le client demande "photinia" sans préciser, c'est probablement "Photinia x fraseri Red Robin"
+1. bestMatch = TOUJOURS un produit PIDF si trouvé, avec le litrage le plus proche demandé
+2. Si le client demande "photinia" sans préciser la variété, choisis "Photinia Red Robin (En touffe)" chez PIDF (c'est le best-seller)
+3. Si le client demande "lavande", choisis "Lavande bleue (Lavandula Angustifolia Hidcote)" chez PIDF
 4. Les prix PIDF sont des prix de VENTE. Les prix des autres fournisseurs sont des prix d'ACHAT.
-5. Propose au moins 3-4 alternatives de différents fournisseurs et tailles
+5. Propose au moins 2-3 alternatives d'autres fournisseurs
 
 RÉPONDS UNIQUEMENT en JSON:
 [{
@@ -1945,38 +1947,23 @@ async function generateQuote() {
       const clientRequestedPotSize = originalPlant.potSize || 0;
       const matches = [];
 
-      // Best match from Claude
+      // Best match from Claude — find it in our data first
       if (item.bestMatch && item.bestMatch.name) {
-        matches.push({
-          name: item.bestMatch.name,
-          supplier: item.bestMatch.supplier,
-          price: item.bestMatch.price,
-          potSize: item.bestMatch.potSize || '',
-          potSizeNum: parseInt(item.bestMatch.potSize) || 0,
-          height: item.bestMatch.height || '',
-          forme: item.bestMatch.forme || '',
-          cond: '',
-          sizeInfo: '',
-          score: 1.0
-        });
+        const found = findProductInData(item.bestMatch.name, item.bestMatch.supplier, item.bestMatch.potSize, item.bestMatch.price);
+        if (found && found.price > 0) {
+          matches.push(found);
+        }
+        // If not found or price 0, don't add — enrichment will find valid products
       }
 
       // Alternatives from Claude
       if (item.alternatives) {
         for (const alt of item.alternatives) {
           if (alt.name) {
-            matches.push({
-              name: alt.name,
-              supplier: alt.supplier,
-              price: alt.price,
-              potSize: alt.potSize || '',
-              potSizeNum: parseInt(alt.potSize) || 0,
-              height: alt.height || '',
-              forme: alt.forme || '',
-              cond: '',
-              sizeInfo: '',
-              score: 0.85
-            });
+            const foundAlt = findProductInData(alt.name, alt.supplier, alt.potSize, alt.price);
+            if (foundAlt && foundAlt.price > 0) {
+              matches.push(foundAlt);
+            }
           }
         }
       }
@@ -2376,6 +2363,12 @@ function renderResults(results) {
     // Remove any 0-price entries
     while (allSuppliersGlobal.length > 0 && allSuppliersGlobal[0].price <= 0) {
       allSuppliersGlobal.shift();
+    }
+    // ALWAYS put PIDF first if present
+    const pidfIdx = allSuppliersGlobal.findIndex(s => isPIDFSupplier(s.supplier));
+    if (pidfIdx > 0) {
+      const pidfEntry = allSuppliersGlobal.splice(pidfIdx, 1)[0];
+      allSuppliersGlobal.unshift(pidfEntry);
     }
 
     // ALWAYS show as dropdown
