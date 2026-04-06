@@ -2103,22 +2103,55 @@ async function generateQuote() {
     if (!window._preSelectDone) {
       window._preSelectDone = true;
 
-    // Now adjust selections based on requested litrage
+    // Now adjust selections: first by keywords, then by size
     const structured = window._structuredResults;
     if (structured) {
       let changed = false;
       for (let i = 0; i < structured.length; i++) {
         const r = structured[i];
+        if (!r.varieties.length) continue;
+
         const reqSize = results[i]._requestedPotSize || 0;
         const reqHeight = results[i]._requestedHeight || '';
-        if ((!reqSize && !reqHeight) || !r.varieties.length) continue;
+        const reqText = (results[i].requested || '').toLowerCase();
 
-        let bestVar = -1, bestSize = -1, bestDist = 999;
+        // STEP A: Find variety matching specific keywords from the client request
+        // Extract distinctive words (not generic plant names, not numbers)
+        const genericWords = ['photinia','red','robin','citronnier','jaune','lavande','olivier','glycine','acer','palmatum','wisteria','olea','laurier','bambou','cyprès','fraseri','serrulata'];
+        const reqWords = reqText.split(/\s+/).filter(w => w.length > 2 && !genericWords.includes(w) && !/^\d/.test(w));
+
+        if (reqWords.length > 0) {
+          // Find the variety whose name best matches these keywords
+          let bestKeywordVar = -1;
+          let bestKeywordHits = 0;
+          for (let vi = 0; vi < r.varieties.length; vi++) {
+            const vName = (r.varieties[vi].name || '').toLowerCase();
+            let hits = 0;
+            for (const w of reqWords) {
+              if (vName.includes(w)) hits++;
+            }
+            // Prefer PIDF varieties
+            const pidfBonus = r.varieties[vi].items.some(m => isPIDFSupplier(m.supplier)) ? 0.5 : 0;
+            if (hits + pidfBonus > bestKeywordHits) {
+              bestKeywordHits = hits + pidfBonus;
+              bestKeywordVar = vi;
+            }
+          }
+          if (bestKeywordVar >= 0 && bestKeywordHits >= 1) {
+            results[i].selectedVariety = bestKeywordVar;
+            changed = true;
+          }
+        }
+
+        // STEP B: Find best size within the selected variety
+        if (!reqSize && !reqHeight) continue;
+        let bestVar = results[i].selectedVariety ?? 0;
+        let bestSize = -1, bestDist = 999;
 
         if (reqSize > 0) {
-          // Match by pot size — prefer variety 0 (already sorted by popularity)
-          // Only move to another variety if variety 0 doesn't have this size at all
-          for (let vi = 0; vi < r.varieties.length; vi++) {
+          // Match by pot size — first try the keyword-selected variety, then others
+          const startVar = bestVar;
+          for (let vi = startVar; vi < r.varieties.length; vi++) {
             for (let si = 0; si < r.varieties[vi].sizes.length; si++) {
               const sg = r.varieties[vi].sizes[si];
               if (sg.potSizeNum > 0) {
