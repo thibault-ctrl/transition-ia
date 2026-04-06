@@ -1384,21 +1384,12 @@ function updateSupplierCount() {
 
 // ============ STORAGE ============
 function saveToStorage() {
-  try {
-    localStorage.setItem('pepiniquote_suppliers', JSON.stringify(suppliers));
-  } catch (e) {
-    console.warn('localStorage full, data too large');
-    showToast('Attention : données trop volumineuses pour le stockage local', 'error');
-  }
+  // Suppliers are too large for localStorage (8MB+)
+  // Only save small data like API key
 }
 
 function loadFromStorage() {
-  try {
-    const saved = localStorage.getItem('pepiniquote_suppliers');
-    if (saved) suppliers = JSON.parse(saved);
-  } catch (e) {
-    console.warn('Failed to load from storage');
-  }
+  // Suppliers loaded from server in startup()
 }
 
 // ============ FUZZY MATCHING ============
@@ -2927,19 +2918,16 @@ function showToast(msg, type = 'info') {
 
 // ============ START ============
 async function startup() {
-  // Auto-load suppliers from server if localStorage is empty or has fewer suppliers
-  const saved = localStorage.getItem('pepiniquote_suppliers');
-  const savedCount = saved ? JSON.parse(saved).filter(Boolean).length : 0;
-  if (savedCount < 4) { // Expect 4 suppliers: Catalogue, Vannucci, PIDF, Fleur Pro
-    try {
-      const resp = await fetch('/suppliers_preload.json');
-      if (resp.ok) {
-        const data = await resp.json();
-        localStorage.setItem('pepiniquote_suppliers', JSON.stringify(data));
-        console.log('Auto-loaded', data.filter(Boolean).length, 'suppliers from server');
-      }
-    } catch (e) { console.warn('No preload file found'); }
-  }
+  // Always load suppliers from server (too large for localStorage)
+  try {
+    const resp = await fetch('/suppliers_preload.json');
+    if (resp.ok) {
+      suppliers = (await resp.json()).map(s => s || null);
+      // Ensure array has 5 slots
+      while (suppliers.length < 5) suppliers.push(null);
+      console.log('Loaded', suppliers.filter(Boolean).length, 'suppliers from server');
+    }
+  } catch (e) { console.warn('Failed to load suppliers:', e); }
 
   // Auto-load API key from server .env
   if (!localStorage.getItem('pepiniquote_apikey')) {
