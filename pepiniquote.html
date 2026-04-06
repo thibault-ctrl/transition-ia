@@ -2398,31 +2398,8 @@ function renderResults(results) {
     });
     varietyHtml += '</select>';
 
-    // --- Size/Taille dropdown: collect from ALL varieties ---
-    const allSizes = [];
-    const seenSizes = new Set();
-    // Current variety sizes first
-    for (const sg of variety.sizes) {
-      const cheapest = sg.suppliers[0];
-      const key = sg.potSizeNum + '|' + (cheapest.height || '');
-      if (!seenSizes.has(key)) {
-        seenSizes.add(key);
-        allSizes.push({ ...sg, fromVariety: variety.name, isCurrent: true });
-      }
-    }
-    // Then other varieties' sizes
-    for (const v of r.varieties) {
-      if (v === variety) continue;
-      for (const sg of v.sizes) {
-        const cheapest = sg.suppliers[0];
-        const key = sg.potSizeNum + '|' + (cheapest.height || '');
-        if (!seenSizes.has(key)) {
-          seenSizes.add(key);
-          allSizes.push({ ...sg, fromVariety: v.name, isCurrent: false });
-        }
-      }
-    }
-    // Sort by potSizeNum
+    // --- Size/Taille dropdown: only sizes from the SELECTED variety ---
+    const allSizes = variety.sizes.map(sg => ({ ...sg, fromVariety: variety.name, isCurrent: true }));
     allSizes.sort((a, b) => a.potSizeNum - b.potSizeNum);
 
     // ALWAYS show as dropdown
@@ -2443,34 +2420,32 @@ function renderResults(results) {
     if (!window._allSizesMap) window._allSizesMap = {};
     window._allSizesMap[i] = allSizes;
 
-    // --- Supplier dropdown: for each fournisseur, find the CLOSEST size to the current one ---
-    const currentPotSize = sizeGroup ? sizeGroup.potSizeNum : 0;
+    // --- Supplier dropdown: show all suppliers for the SELECTED size of the SELECTED variety ---
     const allSuppliersGlobal = [];
-    const seenSup = new Set();
-    // Current supplier first
-    seenSup.add(current.supplier);
-    allSuppliersGlobal.push({ ...current, note: '' });
-    // For each other supplier, find the product with the closest potSize
-    const supplierBest = {}; // supplier -> best matching product
-    for (const v of r.varieties) {
-      for (const sg of v.sizes) {
-        for (const s of sg.suppliers) {
-          if (s.supplier === current.supplier) continue;
-          const dist = currentPotSize > 0 && sg.potSizeNum > 0 ? Math.abs(sg.potSizeNum - currentPotSize) : 999;
-          if (!supplierBest[s.supplier] || dist < supplierBest[s.supplier].dist) {
-            const rawPS = s.potSize || (sg.potSizeNum > 0 ? String(sg.potSizeNum) : '');
-            const psLabel = rawPS ? (rawPS.toUpperCase().endsWith('L') ? rawPS : rawPS + 'L') : '';
-            supplierBest[s.supplier] = { ...s, note: psLabel ? ` (${psLabel})` : '', dist };
+    // All suppliers for this exact size group
+    if (sizeGroup) {
+      for (const s of sizeGroup.suppliers) {
+        if (s.price > 0) allSuppliersGlobal.push({ ...s, note: '' });
+      }
+    }
+    // If only 1 or 0, also look for the same genus+potSize across other varieties
+    if (allSuppliersGlobal.length <= 1) {
+      const currentPotSize = sizeGroup ? sizeGroup.potSizeNum : 0;
+      for (const v of r.varieties) {
+        if (v === variety) continue;
+        for (const sg of v.sizes) {
+          if (currentPotSize > 0 && sg.potSizeNum === currentPotSize) {
+            for (const s of sg.suppliers) {
+              const exists = allSuppliersGlobal.find(x => x.supplier === s.supplier);
+              if (!exists && s.price > 0) {
+                const rawPS = s.potSize || (sg.potSizeNum > 0 ? String(sg.potSizeNum) : '');
+                const psLabel = rawPS ? (rawPS.toUpperCase().endsWith('L') ? rawPS : rawPS + 'L') : '';
+                allSuppliersGlobal.push({ ...s, note: psLabel ? ` (${psLabel})` : '' });
+              }
+            }
           }
         }
       }
-    }
-    for (const [supName, bestMatch] of Object.entries(supplierBest)) {
-      if (bestMatch.price > 0) allSuppliersGlobal.push(bestMatch);
-    }
-    // Remove any 0-price entries
-    while (allSuppliersGlobal.length > 0 && allSuppliersGlobal[0].price <= 0) {
-      allSuppliersGlobal.shift();
     }
     // ALWAYS put PIDF first if present
     const pidfIdx = allSuppliersGlobal.findIndex(s => isPIDFSupplier(s.supplier));
@@ -2536,42 +2511,16 @@ function switchSupplier(rowIndex, supIndex) {
   renderResults(window._quoteResults);
 }
 
-function switchSizeGlobal(rowIndex, globalSizeIndex) {
-  const allSizes = window._allSizesMap[rowIndex];
-  if (!allSizes) return;
-  const selected = allSizes[parseInt(globalSizeIndex)];
-  if (!selected) return;
-
-  // Find which variety this size belongs to and switch to it
+function switchSizeGlobal(rowIndex, sizeIndex) {
   const r = window._quoteResults[rowIndex];
-  const structured = window._structuredResults[rowIndex];
-  if (selected.isCurrent) {
-    // Same variety, just change size
-    const sizeIdx = structured.varieties[structured.selectedVariety || 0].sizes.indexOf(selected);
-    r.selectedSize = sizeIdx >= 0 ? sizeIdx : 0;
-  } else {
-    // Different variety — find it and switch
-    for (let vi = 0; vi < structured.varieties.length; vi++) {
-      if (structured.varieties[vi].name === selected.fromVariety) {
-        r.selectedVariety = vi;
-        // Find the size index in this variety
-        for (let si = 0; si < structured.varieties[vi].sizes.length; si++) {
-          if (structured.varieties[vi].sizes[si].potSizeNum === selected.potSizeNum) {
-            r.selectedSize = si;
-            break;
-          }
-        }
-        break;
-      }
-    }
-  }
+  r.selectedSize = parseInt(sizeIndex);
   r.selectedSupplier = 0;
   renderResults(window._quoteResults);
 }
 
-function switchSupplierGlobal(rowIndex, globalSupIndex) {
-  // For now just re-render — the price display updates from the dropdown
-  // In the future we could switch variety/size to match this supplier
+function switchSupplierGlobal(rowIndex, supIndex) {
+  const r = window._quoteResults[rowIndex];
+  r.selectedSupplier = parseInt(supIndex);
   renderResults(window._quoteResults);
 }
 
