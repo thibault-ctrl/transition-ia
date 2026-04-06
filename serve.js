@@ -159,25 +159,17 @@ http.createServer((req, res) => {
     (async () => {
       try {
         // Step 1: Login to get session cookie
-        if (!global._fleurCookies) {
-          // Get login page for session cookie
+        { // Login fresh each time
           const loginPage = await fetch('https://www.fleurproshop.com/fr/connexion/');
-          const cookies = loginPage.headers.getSetCookie ? loginPage.headers.getSetCookie() : [];
-          const sessionCookie = cookies.map(c => c.split(';')[0]).join('; ');
-
-          // Submit login with correct field names
+          const c1 = loginPage.headers.getSetCookie().map(c => c.split(';')[0]);
           const authResp = await fetch('https://www.fleurproshop.com/fr/connexion/', {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded',
-              'Cookie': sessionCookie
-            },
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Cookie': c1.join('; ') },
             body: 'login%5Bemail%5D=planteidf%40gmail.com&login%5Bpassword%5D=D2690',
             redirect: 'manual'
           });
-          const authCookies = authResp.headers.getSetCookie ? authResp.headers.getSetCookie() : [];
-          global._fleurCookies = [sessionCookie, ...authCookies.map(c => c.split(';')[0])].join('; ');
-          console.log('Fleur Pro login:', authResp.status, 'cookies:', authCookies.length);
+          global._fleurCookies = authResp.headers.getSetCookie().map(c => c.split(';')[0]).join('; ');
+          console.log('Fleur login:', authResp.status);
         }
 
         // Step 2: Search (correct URL is /fr/assortiment/?s=)
@@ -186,46 +178,47 @@ http.createServer((req, res) => {
           headers: { 'Cookie': global._fleurCookies }
         });
         const html = await searchResp.text();
-        console.log('Fleur HTML size:', html.length, 'has C 5L:', html.includes('C 5L'));
-
-        // Step 3: Parse results from HTML
+        // Step 3: Parse - convert to text then find patterns
         const products = [];
-        // Extract product names
-        const prodNames = [...html.matchAll(/>([A-Z][a-z]+[^<]{5,80}(?:fraseri|japonica|sinensis|europaea|varieta|banksiae|officinalis|lamarckii|palmatum)[^<]*)<\//gi)];
-        let currentName = '';
-
-        // Extract sizes and prices using the table structure
-        const sizeMatches = [...html.matchAll(/>(C\s*\d+[^<]{0,20}L?|P\d+)[^<]*<\/td>/gi)];
-        const priceMatches = [...html.matchAll(/€\s*([\d,]+)\s*<sup>(\d+)<\/sup>/g)];
-
-        // Simpler approach: find all product blocks
         const text = html.replace(/<\/?\w[^>]*>/g, '\n').replace(/&euro;/gi, '€').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&#\d+;/g, ' ').replace(/&\w+;/g, ' ');
-        const lines = text.split(/\n+/).map(l => l.trim()).filter(l => l.length > 0);
+        const lines = text.split(/\n/).map(l => l.trim()).filter(l => l.length > 0);
 
+        let currentName = '';
+        const sizeLines = lines.filter(l => /^(C|P)\s*[\d,]/i.test(l) && l.length < 35);
+        const nameLines = lines.filter(l => /^[A-Z][a-z]+\s+(x?[a-z]|'[A-Z])/.test(l) && l.length > 8 && l.length < 100);
+        console.log('Fleur lines:', lines.length, 'sizes:', sizeLines.length, 'names:', nameLines.length);
+        if (nameLines.length > 0) console.log('  First name:', nameLines[0]);
+        if (sizeLines.length > 0) console.log('  First size:', sizeLines[0]);
+        const priceLines = lines.filter(l => l.match(/'>[\d]+,[\d]+/));
+        console.log('  Price lines:', priceLines.length);
+        if (priceLines.length > 0) console.log('  First price:', priceLines[0].substring(0, 40));
         for (let i = 0; i < lines.length; i++) {
-          // Product name
-          if (lines[i].match(/^[A-Z][a-z]/) && lines[i].length > 10 && lines[i].length < 120 && !lines[i].match(/^(Taille|Photo|Prix|Quantit|Votre|Nom|Hauteur|Dispo|Plus d|STARTPRIJS|zt\d|Recherche|Afficher|Liste|Trier|Actions|Description|Jardinerie|Jeunes|Garden|Produit|Cacher)/)) {
+          // Track product names (from product-name td content)
+          // Product names are Latin binomials like "Lavandula stoechas"
+          if (/^[A-Z][a-z]{3,}\s+(x?[a-z]{3,}|'[A-Z])/.test(lines[i]) && lines[i].length > 8 && lines[i].length < 100 && !/^(Des |Pour |Vous |Votre |Recherche|Afficher|Toutes|Jardinerie|Conditions|Service|Livraison|Copyright|Website|Newsletter)/.test(lines[i])) {
             currentName = lines[i].trim();
           }
-          // Size pattern: C 5L, P27, C 40CM DT
-          if (lines[i].match(/^C\s*\d|^P\d/i) && lines[i].length < 30 && currentName) {
+          // Size line: starts with C or P followed by digit
+          if (/^(C|P)\s*[\d,]/i.test(lines[i]) && lines[i].length < 35 && currentName) {
             const taille = lines[i].trim();
-            // Find price in next few lines
-            for (let j = i + 1; j < Math.min(i + 10, lines.length); j++) {
-              const priceMatch = lines[j].match(/['>€\s]([\d]+[,.][\d]+)/);
-              if (priceMatch && parseFloat(priceMatch[1].replace(',', '.')) > 1) {
-                const price = parseFloat(priceMatch[1].replace(',', '.'));
-                const potMatch = taille.match(/(\d+)\s*L/i);
-                const potSize = potMatch ? potMatch[1] : '';
-                const heightMatch = taille.match(/(\d{2,3}\/[\d+]+)/);
-                const formeMatch = taille.match(/\b(DT|TIGE)\b/i);
-                products.push({
-                  name: currentName + ' ' + taille,
-                  price, potSize,
-                  potSizeNum: potSize ? parseInt(potSize) : 0,
-                  height: heightMatch ? heightMatch[1] : '',
-                  forme: formeMatch ? formeMatch[1] : ''
-                });
+            // Search forward for price pattern '>X,XX
+            for (let j = i + 1; j < Math.min(i + 15, lines.length); j++) {
+              const m = lines[j].match(/'>(\d+,\d+)/);
+              if (m) {
+                const price = parseFloat(m[1].replace(',', '.'));
+                if (price > 0.5) {
+                  const potMatch = taille.match(/(\d+)\s*L/i);
+                  const potSize = potMatch ? potMatch[1] : '';
+                  const heightMatch = taille.match(/(\d{2,3}\/[\d+]+)/);
+                  const formeMatch = taille.match(/\b(DT|TIGE|BOULE|CONE|ARC|PYRAMIDE|CHAMPIGNON)\b/i);
+                  products.push({
+                    name: currentName + ' ' + taille,
+                    price, potSize,
+                    potSizeNum: potSize ? parseInt(potSize) : 0,
+                    height: heightMatch ? heightMatch[1] : '',
+                    forme: formeMatch ? formeMatch[1] : ''
+                  });
+                }
                 break;
               }
             }
