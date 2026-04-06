@@ -2462,7 +2462,11 @@ function renderResults(results) {
     if (r._targetPotSize && r._targetPotSize > 0) {
       const targetIdx = supplierSizes.findIndex(sg => sg.potSizeNum === r._targetPotSize);
       if (targetIdx >= 0) selSize = targetIdx;
-      delete r._targetPotSize; // use once
+      delete r._targetPotSize;
+      // Also delete from quoteResults to prevent re-triggering
+      if (window._quoteResults && window._quoteResults[i]) {
+        delete window._quoteResults[i]._targetPotSize;
+      }
     }
     const current = supplierSizes[selSize] ? supplierSizes[selSize].item : (variety.sizes[0]?.suppliers[0] || {});
 
