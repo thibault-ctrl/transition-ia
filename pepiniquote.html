@@ -1973,8 +1973,12 @@ async function generateQuote() {
       }
 
       // ENRICH: search ALL catalogues (including PIDF) for matching plants
+      // Extract color from the client request if present
+      const reqText = (item.requested || '').toLowerCase();
+      const colorKeywords = ['blanche', 'blanc', 'bleue', 'bleu', 'rose', 'rouge', 'jaune', 'violet', 'violette', 'alba', 'white', 'blue', 'pink'];
+      const requestedColor = colorKeywords.find(c => reqText.includes(c)) || '';
+
       // Use the GENUS name (first word) as the primary search key
-      // e.g. "PHOTINIA X FRASERI RED ROBIN" -> genus = "photinia"
       const genusNames = new Set();
       for (const m of matches) {
         const firstWord = normalize(m.name).split(' ').find(t => t.length > 3);
@@ -2000,9 +2004,18 @@ async function generateQuote() {
           if (!genusMatch) continue;
 
           // Genus matches - include this plant
-          const exists = matches.find(x => x.name === plant.name && x.supplier === sup.name && x.potSize === plant.potSize);
+          const exists = matches.find(x => x.name === plant.name && x.supplier === sup.name && x.potSize === plant.potSize && x.height === plant.height);
           if (!exists) {
-            // Score based on how many secondary words match
+            // Check color compatibility
+            const plantFullText = (plantNorm + ' ' + (plant.height || '')).toLowerCase();
+            if (requestedColor) {
+              // Map French color words to what might appear in data
+              const colorMap = { 'blanche': 'blanche', 'blanc': 'blanche', 'bleue': 'bleue', 'bleu': 'bleue', 'rose': 'rose', 'rouge': 'rouge', 'alba': 'alba' };
+              const targetColor = colorMap[requestedColor] || requestedColor;
+              const hasWrongColor = colorKeywords.some(c => plantFullText.includes(c) && !plantFullText.includes(targetColor));
+              if (hasWrongColor) continue; // Skip plants with wrong color
+            }
+
             let secHits = 0;
             for (const sw of secondaryWords) {
               if (plantNorm.includes(sw)) secHits++;
