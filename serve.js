@@ -7,6 +7,14 @@ const url = require('url');
 const PORT = 8081;
 const DIR = __dirname;
 
+// Load .env file for API key
+let ANTHROPIC_API_KEY = '';
+try {
+  const envContent = fs.readFileSync(path.join(DIR, '.env'), 'utf8');
+  const match = envContent.match(/ANTHROPIC_API_KEY=(.+)/);
+  if (match) ANTHROPIC_API_KEY = match[1].trim();
+} catch(e) {}
+
 const MIME = {
   '.html': 'text/html',
   '.js': 'application/javascript',
@@ -61,6 +69,13 @@ http.createServer((req, res) => {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', '*');
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
+
+  // CONFIG: return API key from .env
+  if (pathname === '/api/config') {
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+    res.end(JSON.stringify({ apiKey: ANTHROPIC_API_KEY }));
+    return;
+  }
 
   // PROXY: /proxy/pidf?q=...  → Shopify search
   if (pathname === '/proxy/pidf/search') {

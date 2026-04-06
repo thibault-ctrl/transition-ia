@@ -2156,7 +2156,7 @@ async function generateQuote() {
 
         if (bestVar >= 0 && bestDist <= 2) {
           results[i].selectedVariety = bestVar;
-          results[i].selectedSize = bestSize;
+          results[i]._targetPotSize = r.varieties[bestVar].sizes[bestSize].potSizeNum;
           results[i].selectedSupplier = 0;
           changed = true;
         }
@@ -2457,7 +2457,13 @@ function renderResults(results) {
     supplierSizes.sort((a, b) => a.potSizeNum - b.potSizeNum);
 
     // --- Step 4: Select size and get current product ---
-    const selSize = Math.min(r.selectedSize ?? 0, supplierSizes.length - 1);
+    // If _targetPotSize is set, find the matching index in supplierSizes
+    let selSize = Math.min(r.selectedSize ?? 0, supplierSizes.length - 1);
+    if (r._targetPotSize && r._targetPotSize > 0) {
+      const targetIdx = supplierSizes.findIndex(sg => sg.potSizeNum === r._targetPotSize);
+      if (targetIdx >= 0) selSize = targetIdx;
+      delete r._targetPotSize; // use once
+    }
     const current = supplierSizes[selSize] ? supplierSizes[selSize].item : (variety.sizes[0]?.suppliers[0] || {});
 
     const pidf = isPIDFSupplier(current.supplier);
@@ -2588,7 +2594,18 @@ async function startup() {
     } catch (e) { console.warn('No preload file found'); }
   }
 
-  // API key must be entered via the UI button "Clé API Claude"
+  // Auto-load API key from server .env
+  if (!localStorage.getItem('pepiniquote_apikey')) {
+    try {
+      const configResp = await fetch('/api/config');
+      if (configResp.ok) {
+        const config = await configResp.json();
+        if (config.apiKey) {
+          localStorage.setItem('pepiniquote_apikey', config.apiKey);
+        }
+      }
+    } catch(e) {}
+  }
 
   init();
   updateApiKeyStatus();
