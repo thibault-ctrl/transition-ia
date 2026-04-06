@@ -2927,9 +2927,10 @@ function showToast(msg, type = 'info') {
 
 // ============ START ============
 async function startup() {
-  // Auto-load suppliers from server if localStorage is empty
+  // Auto-load suppliers from server if localStorage is empty or has fewer suppliers
   const saved = localStorage.getItem('pepiniquote_suppliers');
-  if (!saved || JSON.parse(saved).filter(Boolean).length === 0) {
+  const savedCount = saved ? JSON.parse(saved).filter(Boolean).length : 0;
+  if (savedCount < 4) { // Expect 4 suppliers: Catalogue, Vannucci, PIDF, Fleur Pro
     try {
       const resp = await fetch('/suppliers_preload.json');
       if (resp.ok) {
