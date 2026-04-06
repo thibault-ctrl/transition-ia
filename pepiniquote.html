@@ -2038,15 +2038,33 @@ async function generateQuote() {
       // Use the GENUS name (first word) as the primary search key
       // Include translations FR→IT/Latin for catalogue matching
       const genusTranslations = {
-        'rosier': ['rosai'], 'olivier': ['olea'], 'laurier': ['laurus', 'prunus'],
+        'rosier': ['rosai'], 'olivier': ['olea'], 'laurier': ['laurus'],
         'citronnier': ['citrus'], 'palmier': ['trachycarpus', 'chamaerops', 'phoenix', 'washingtonia'],
         'bambou': ['phyllostachys', 'fargesia', 'bambusa'], 'cypres': ['cupressus', 'cupressocyparis'],
-        'glycine': ['wisteria'], 'lavande': ['lavandula'], 'erable': ['acer'],
+        'cyprès': ['cupressus', 'cupressocyparis'],
+        'glycine': ['wisteria'], 'lavande': ['lavandula'], 'erable': ['acer'], 'érable': ['acer'],
         'hortensia': ['hydrangea'], 'jasmin': ['trachelospermum', 'jasminum'],
-        'magnolia': ['magnolia'], 'camellia': ['camellia'], 'cerisier': ['prunus'],
-        'pommier': ['malus'], 'poirier': ['pyrus'], 'figuier': ['ficus'],
-        'mimosa': ['acacia'], 'bougainvillier': ['bougainvillea'], 'hibiscus': ['hibiscus'],
-        'romarin': ['rosmarinus'], 'thym': ['thymus'], 'sauge': ['salvia']
+        'magnolia': ['magnolia'], 'camelia': ['camellia'], 'camélia': ['camellia'],
+        'cerisier': ['prunus', 'cerasus'], 'pommier': ['malus'], 'poirier': ['pyrus'],
+        'figuier': ['ficus'], 'mimosa': ['acacia'], 'bougainvillier': ['bougainvillea'],
+        'hibiscus': ['hibiscus'], 'romarin': ['rosmarinus'], 'thym': ['thymus'], 'sauge': ['salvia'],
+        'troene': ['ligustrum'], 'troène': ['ligustrum'], 'lilas': ['syringa', 'lagerstroemia'],
+        'houx': ['ilex'], 'charme': ['carpinus'], 'hetre': ['fagus'], 'hêtre': ['fagus'],
+        'bouleau': ['betula'], 'chene': ['quercus'], 'chêne': ['quercus'],
+        'frene': ['fraxinus'], 'frêne': ['fraxinus'], 'tilleul': ['tilia'],
+        'noisetier': ['corylus'], 'amandier': ['prunus'], 'abricotier': ['prunus'],
+        'prunier': ['prunus'], 'pecher': ['prunus'], 'nectarinier': ['prunus'],
+        'mandarinier': ['citrus'], 'oranger': ['citrus'], 'grenadier': ['punica'],
+        'catalpa': ['catalpa'], 'eucalyptus': ['eucalyptus'], 'albizia': ['albizia'],
+        'azalee': ['azalea', 'rhododendron'], 'azalée': ['azalea', 'rhododendron'],
+        'bruyere': ['erica', 'calluna'], 'bruyère': ['erica', 'calluna'],
+        'fusain': ['euonymus'], 'forsythia': ['forsythia'], 'viorne': ['viburnum'],
+        'cornouiller': ['cornus'], 'cotoneaster': ['cotoneaster'],
+        'spiree': ['spiraea'], 'weigelia': ['weigela'], 'deutzia': ['deutzia'],
+        'abelia': ['abelia'], 'buddleia': ['buddleja'], 'clematis': ['clematis'],
+        'clematite': ['clematis'], 'clématite': ['clematis'],
+        'chevrefeuille': ['lonicera'], 'chèvrefeuille': ['lonicera'],
+        'laurier-cerise': ['prunus'], 'laurier-tin': ['viburnum']
       };
       const genusNames = new Set();
       for (const m of matches) {
@@ -2161,7 +2179,9 @@ async function generateQuote() {
 
         // STEP A: Find variety matching specific keywords from the client request
         // Extract distinctive words (not generic plant names, not numbers)
-        const genericWords = ['photinia','red','robin','citronnier','jaune','lavande','olivier','glycine','acer','palmatum','wisteria','olea','laurier','bambou','cyprès','fraseri','serrulata'];
+        // Only filter truly non-distinctive words (articles, prepositions, very short words)
+        // Do NOT filter plant names — they help distinguish varieties
+        const genericWords = ['les', 'des', 'une', 'pour', 'avec', 'dans', 'qui', 'que'];
         const reqWords = reqText.split(/\s+/).filter(w => w.length > 2 && !genericWords.includes(w) && !/^\d/.test(w));
 
         if (reqWords.length > 0) {
@@ -2212,11 +2232,11 @@ async function generateQuote() {
             if (bestDist <= 2 && bestVar === vi) break;
           }
         } else if (reqHeight) {
-          // Match by height — find variant whose height contains the requested range
-          // Prioritize: PIDF first, then by review count (most popular)
+          // Match by height — first try the keyword-selected variety, then others
           const reqNorm = reqHeight.replace(/\s/g, '').toLowerCase();
           let bestReviews = -1;
-          for (let vi = 0; vi < r.varieties.length; vi++) {
+          const heightStartVar = bestVar;
+          for (let vi = heightStartVar; vi < r.varieties.length; vi++) {
             for (let si = 0; si < r.varieties[vi].sizes.length; si++) {
               const sg = r.varieties[vi].sizes[si];
               const sup = sg.suppliers[0];
@@ -2232,6 +2252,8 @@ async function generateQuote() {
                 }
               }
             }
+            // If we found a match in the keyword-selected variety, stop
+            if (bestDist === 0 && bestVar === vi) break;
           }
         }
 
