@@ -1665,7 +1665,58 @@ IMPORTANT: "100/125" ou "60/80" sont des HAUTEURS en cm, PAS des litrages. Un ph
   return JSON.parse(jsonMatch[0]);
 }
 
-// ============ STEP 2: SEARCH PIDF (Shopify) ============
+// ============ STEP 2: SEARCH PIDF LIVE (real-time via server proxy) ============
+async function searchPIDFLive(searchTerms) {
+  try {
+    const results = [];
+    // Load pot size cache from preloaded PIDF data
+    const pidfSupplier = suppliers.find(s => s && s.name.includes('PIDF'));
+    const potSizeCache = {};
+    if (pidfSupplier) {
+      for (const d of pidfSupplier.data) {
+        // Cache by name+variant
+        const key = d.name + '|' + d.height;
+        potSizeCache[key] = { potSize: d.potSize, potSizeNum: d.potSizeNum };
+      }
+    }
+
+    for (const term of searchTerms.slice(0, 2)) {
+      const resp = await fetch(`/proxy/pidf/live-search?q=${encodeURIComponent(term)}`);
+      const data = await resp.json();
+      if (!data.products) continue;
+
+      for (const p of data.products) {
+        // Look up pot size from cache
+        const cacheKey = p.name + '|' + p.variant;
+        const cached = potSizeCache[cacheKey] || {};
+
+        const exists = results.find(r => r.name === p.name && r.height === p.variant);
+        if (!exists) {
+          results.push({
+            name: p.name,
+            price: p.price,
+            potSize: cached.potSize || '',
+            potSizeNum: cached.potSizeNum || 0,
+            height: p.variant,
+            forme: '',
+            cond: '',
+            sizeInfo: p.variant,
+            supplier: 'PIDF (Mon site)',
+            source: 'pidf-live',
+            score: 1.0,
+            reviews: pidfSupplier ? (pidfSupplier.data.find(d => d.name === p.name)?.reviews || 0) : 0
+          });
+        }
+      }
+    }
+    return results;
+  } catch (e) {
+    console.warn('PIDF live search error:', e);
+    return [];
+  }
+}
+
+// ============ STEP 2b: SEARCH PIDF (old Shopify method - kept for reference) ============
 async function searchPIDF(searchTerms, potSize) {
   try {
     const results = [];
@@ -1928,7 +1979,7 @@ async function generateQuote() {
       showLoading(`🔍 Recherche: ${plant.botanicalName}...`);
 
       const [pidfResults, excelResults, fleurResults] = await Promise.all([
-        Promise.resolve([]), // PIDF is in preloaded suppliers, no live search needed
+        searchPIDFLive(plant.searchTerms),
         Promise.resolve(searchExcelCatalogues(plant.searchTerms, plant.potSize)),
         searchFleurPro(plant.searchTerms)
       ]);

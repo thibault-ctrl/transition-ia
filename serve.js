@@ -83,6 +83,61 @@ http.createServer((req, res) => {
     return proxyRequest(targetUrl, res);
   }
 
+  // PROXY: /proxy/pidf/live-search?q=...  → Real-time search in PIDF products
+  if (pathname === '/proxy/pidf/live-search') {
+    const q = (parsedUrl.query.q || '').toLowerCase();
+    const terms = q.split(/\s+/).filter(t => t.length > 2);
+    if (!terms.length) { res.writeHead(400); res.end('{}'); return; }
+
+    // Fetch all products from Shopify JSON API (not blocked by Cloudflare)
+    (async () => {
+      try {
+        const results = [];
+        let page = 1;
+        while (page <= 2) { // max 2 pages = 500 products
+          const resp = await fetch(`https://les-plantes-ile-de-france.com/products.json?limit=250&page=${page}`);
+          const data = await resp.json();
+          if (!data.products || !data.products.length) break;
+
+          for (const p of data.products) {
+            const titleLower = p.title.toLowerCase();
+            // Check if any search term matches the product title
+            const matches = terms.filter(t => titleLower.includes(t));
+            if (matches.length === 0) continue;
+
+            for (const v of p.variants) {
+              results.push({
+                name: p.title,
+                handle: p.handle,
+                variant: v.title,
+                price: parseFloat(v.price),
+                variantId: v.id,
+                available: v.available,
+                score: matches.length / terms.length
+              });
+            }
+          }
+          page++;
+          if (data.products.length < 250) break;
+        }
+
+        // Sort by score desc, price asc
+        results.sort((a, b) => b.score - a.score || a.price - b.price);
+
+        res.writeHead(200, {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Cache-Control': 'no-cache'
+        });
+        res.end(JSON.stringify({ products: results.slice(0, 30) }));
+      } catch (err) {
+        res.writeHead(502);
+        res.end(JSON.stringify({ error: err.message }));
+      }
+    })();
+    return;
+  }
+
   // PROXY: /proxy/fleur?q=...  → Fleur Pro search
   if (pathname === '/proxy/fleur') {
     const q = parsedUrl.query.q || '';
