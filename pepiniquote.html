@@ -2319,8 +2319,13 @@ function structureResults(results) {
       else if (nameLower.includes('torsad')) form = 'torsade';
       else if (nameLower.includes('mini-tige') || formeLower.includes('mini tige')) form = 'mini-tige';
       else if (nameLower.includes('demi-tige') || formeLower.includes('demi-tige')) form = 'demi-tige';
+      else if (nameLower.includes('tonneau')) form = 'tonneau';
+      else if (nameLower.includes('arche')) form = 'arche';
+      else if (nameLower.includes('pergola')) form = 'pergola';
+      else if (nameLower.includes('plateau')) form = 'plateau';
+      else if (nameLower.includes('centenaire')) form = 'centenaire';
       else form = 'touffe';
-      return n.replace(/(en\s*)?(touffe|tige|palissade|boule|troncs?\s*torsad[eé]s?|mini[- ]tige|demi[- ]tige)/gi, '').trim() + '|' + form;
+      return n.replace(/(en\s*)?(touffe|tige|palissade|boule|troncs?\s*torsad[eé]s?|mini[- ]tige|demi[- ]tige|tonneau|arche|pergola|plateau)/gi, '').trim() + '|' + form;
     }
 
     function cleanVarietyName(items) {
