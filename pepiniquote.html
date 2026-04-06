@@ -903,9 +903,17 @@ function setPricingMode(mode) {
   }
 }
 
-function calculateSellPrice(buyPrice) {
+function calculateSellPrice(buyPrice, isPIDF) {
+  if (isPIDF) {
+    // PIDF prices are already sell prices - apply pro discount if needed
+    return pricingMode === 'pro' ? buyPrice * 0.77 : buyPrice;
+  }
   const base = buyPrice * 3.5;
   return pricingMode === 'pro' ? base * 0.77 : base;
+}
+
+function isPIDFSupplier(supplierName) {
+  return supplierName && supplierName.includes('PIDF');
 }
 
 // ============ SUPPLIER CARDS ============
@@ -2224,7 +2232,9 @@ function renderResults(results) {
     const selSup = Math.min(r.selectedSupplier ?? 0, sizeGroup.suppliers.length - 1);
     const current = sizeGroup.suppliers[selSup];
 
-    const sellPrice = calculateSellPrice(current.price);
+    const pidf = isPIDFSupplier(current.supplier);
+    const sellPrice = calculateSellPrice(current.price, pidf);
+    const buyPriceLabel = pidf ? '—' : current.price.toFixed(2) + ' €';
     const lineTotal = sellPrice * r.qty;
     totalGeneral += lineTotal;
 
@@ -2275,7 +2285,9 @@ function renderResults(results) {
       const formeInfo = cheapest.forme ? ' ' + cheapest.forme : '';
       const src = sg.isCurrent ? '' : ' [' + cheapest.supplier.substring(0, 15) + ']';
       const isSelected = sg.isCurrent && sg.potSizeNum === (sizeGroup ? sizeGroup.potSizeNum : -1);
-      sizeHtml += `<option value="${si}" ${isSelected ? 'selected' : ''}>${label}${heightInfo}${formeInfo}${src} — ${cheapest.price.toFixed(2)}€</option>`;
+      const sizePrice = isPIDFSupplier(cheapest.supplier) ? cheapest.price : calculateSellPrice(cheapest.price, false);
+      const sizePriceTag = isPIDFSupplier(cheapest.supplier) ? '(vente)' : '';
+      sizeHtml += `<option value="${si}" ${isSelected ? 'selected' : ''}>${label}${heightInfo}${formeInfo}${src} — ${sizePrice.toFixed(2)}€</option>`;
     });
     sizeHtml += '</select>';
 
@@ -2322,7 +2334,7 @@ function renderResults(results) {
       </td>
       <td>${sizeHtml}</td>
       <td>${supplierHtml}</td>
-      <td><span class="price-buy">${current.price.toFixed(2)} €</span></td>
+      <td><span class="price-buy">${buyPriceLabel}</span></td>
       <td><span class="price-sell">${sellPrice.toFixed(2)} €</span></td>
       <td>${r.qty}</td>
       <td><strong>${lineTotal.toFixed(2)} €</strong></td>
