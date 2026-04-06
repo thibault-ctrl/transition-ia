@@ -2112,22 +2112,23 @@ async function generateQuote() {
         let bestVar = -1, bestSize = -1, bestDist = 999;
 
         if (reqSize > 0) {
-          // Match by pot size — prioritize PIDF + most reviews
-          let bestReviews = -1;
+          // Match by pot size — prefer variety 0 (already sorted by popularity)
+          // Only move to another variety if variety 0 doesn't have this size at all
           for (let vi = 0; vi < r.varieties.length; vi++) {
             for (let si = 0; si < r.varieties[vi].sizes.length; si++) {
               const sg = r.varieties[vi].sizes[si];
               if (sg.potSizeNum > 0) {
                 const dist = Math.abs(sg.potSizeNum - reqSize);
-                if (dist < bestDist || (dist === bestDist && (sg.suppliers[0].reviews || 0) > bestReviews)) {
-                  const sup = sg.suppliers[0];
+                // Prefer earlier varieties (they're sorted by popularity already)
+                if (dist < bestDist) {
                   bestDist = dist;
-                  bestReviews = sup.reviews || 0;
                   bestVar = vi;
                   bestSize = si;
                 }
               }
             }
+            // If we found an exact or close match in this variety, stop looking
+            if (bestDist <= 2 && bestVar === vi) break;
           }
         } else if (reqHeight) {
           // Match by height — find variant whose height contains the requested range
