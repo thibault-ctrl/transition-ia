@@ -1889,7 +1889,8 @@ RÉPONDS UNIQUEMENT en JSON:
 [{
   "requested": "texte original client",
   "qty": nombre,
-  "bestMatch": {"name":"NOM EXACT","supplier":"fournisseur","potSize":"10","height":"","price":12.50},
+  "bestMatch": {"name":"NOM EXACT","supplier":"fournisseur","potSize":"10","height":"150/175cm / Blanche","price":12.50},
+IMPORTANT pour height: copie la valeur EXACTE de la colonne dans les résultats. Si la plante est "3L H:150/175cm / Blanche", mets height="150/175cm / Blanche". Ça permet de distinguer les couleurs.
   "alternatives": [{"name":"...","supplier":"...","potSize":"...","height":"...","price":0}]
 }]`,
       messages: [{ role: 'user', content: `Demande client et résultats:\n${context}` }]
@@ -1952,7 +1953,7 @@ async function generateQuote() {
 
       // Best match from Claude — find it in our data first
       if (item.bestMatch && item.bestMatch.name) {
-        const found = findProductInData(item.bestMatch.name, item.bestMatch.supplier, item.bestMatch.potSize, item.bestMatch.price);
+        const found = findProductInData(item.bestMatch.name, item.bestMatch.supplier, item.bestMatch.potSize, item.bestMatch.price, item.bestMatch.height);
         if (found && found.price > 0) {
           matches.push(found);
         }
@@ -1963,7 +1964,7 @@ async function generateQuote() {
       if (item.alternatives) {
         for (const alt of item.alternatives) {
           if (alt.name) {
-            const foundAlt = findProductInData(alt.name, alt.supplier, alt.potSize, alt.price);
+            const foundAlt = findProductInData(alt.name, alt.supplier, alt.potSize, alt.price, alt.height);
             if (foundAlt && foundAlt.price > 0) {
               matches.push(foundAlt);
             }
@@ -2104,7 +2105,16 @@ async function generateQuote() {
 }
 
 // Find a product in our supplier data by name, supplier, potSize
-function findProductInData(matchedName, supplierName, potSize, price) {
+function findProductInData(matchedName, supplierName, potSize, price, height) {
+  const heightNorm = (height || '').toLowerCase().replace(/\s/g, '');
+
+  // Helper: check if a plant's height matches
+  function heightMatches(plantHeight) {
+    if (!heightNorm) return true; // no height filter
+    const ph = (plantHeight || '').toLowerCase().replace(/\s/g, '');
+    return ph.includes(heightNorm) || heightNorm.includes(ph);
+  }
+
   // First search in live results (PIDF, Fleur Pro)
   const live = window._liveSearchResults || [];
   for (const plant of live) {
@@ -2112,12 +2122,13 @@ function findProductInData(matchedName, supplierName, potSize, price) {
       if (supplierName && plant.supplier !== supplierName) continue;
       if (potSize && plant.potSizeNum && String(plant.potSizeNum) !== String(parseInt(potSize))) continue;
       if (price && Math.abs(plant.price - price) > 0.5) continue;
+      if (!heightMatches(plant.height)) continue;
       return { ...plant, score: 1.0 };
     }
   }
   // Relaxed live search by name only
   for (const plant of live) {
-    if (plant.name === matchedName) {
+    if (plant.name === matchedName && heightMatches(plant.height)) {
       return { ...plant, score: 0.95 };
     }
   }
@@ -2130,6 +2141,7 @@ function findProductInData(matchedName, supplierName, potSize, price) {
       if (plant.name === matchedName) {
         if (potSize && plant.potSize && String(plant.potSizeNum) !== String(parseInt(potSize))) continue;
         if (price && Math.abs(plant.price - price) > 0.5) continue;
+        if (!heightMatches(plant.height)) continue;
         return { ...plant, supplier: sup.name, score: 1.0 };
       }
     }
