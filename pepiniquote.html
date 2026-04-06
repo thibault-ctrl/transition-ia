@@ -2576,9 +2576,19 @@ function renderResults(results) {
         }
       }
     }
-    // Put PIDF first
+    // Check if PIDF has this plant at all
+    const hasPIDF = supplierNames.some(n => isPIDFSupplier(n));
+    // Put PIDF first if present
     const pidfIdx = supplierNames.findIndex(n => isPIDFSupplier(n));
     if (pidfIdx > 0) supplierNames.unshift(supplierNames.splice(pidfIdx, 1)[0]);
+    // If no PIDF, sort by cheapest price first
+    if (!hasPIDF) {
+      supplierNames.sort((a, b) => {
+        const aPrice = r.varieties.flatMap(v => v.sizes.flatMap(sg => sg.suppliers.filter(s => s.supplier === a).map(s => s.price))).sort((x,y) => x-y)[0] || 999;
+        const bPrice = r.varieties.flatMap(v => v.sizes.flatMap(sg => sg.suppliers.filter(s => s.supplier === b).map(s => s.price))).sort((x,y) => x-y)[0] || 999;
+        return aPrice - bPrice;
+      });
+    }
 
     // --- Step 2: Select supplier ---
     const selSup = Math.min(r.selectedSupplier ?? 0, supplierNames.length - 1);
@@ -2659,10 +2669,13 @@ function renderResults(results) {
     });
     sizeHtml += '</select>';
 
+    const noPidfBadge = !hasPIDF ? '<div style="color:#c0392b;font-size:11px;font-weight:600;margin-top:4px">⚠ Non dispo sur PIDF</div>' : '';
+
     html += `<tr data-row="${i}">
       <td>
         <div class="match-name">${escapeHtml(r.requested)}</div>
         <div class="match-details">× ${r.qty}</div>
+        ${noPidfBadge}
       </td>
       <td>
         <span class="match-score ${scoreClass}">${Math.round(variety.score * 100)}%</span>
