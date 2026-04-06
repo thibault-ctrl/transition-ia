@@ -1652,7 +1652,9 @@ RÉPONDS UNIQUEMENT en JSON:
 [{"requested":"texte original","qty":5,"botanicalName":"Photinia","searchTerms":["photinia","photinia fraseri","photinia red robin"],"potSize":10,"height":"","forme":""}]
 
 searchTerms = variantes du nom à chercher dans les catalogues (nom commun, nom latin, variétés courantes). Mets au moins 3 termes.
-potSize = 0 si pas précisé.`,
+potSize = litrage en litres (ex: 10 pour 10L). 0 si pas précisé.
+height = hauteur en cm si précisée (ex: "100/125" ou "150/200"). Vide si pas précisée.
+IMPORTANT: "100/125" ou "60/80" sont des HAUTEURS en cm, PAS des litrages. Un photinia 100/125 = un photinia de 100 à 125cm de haut.`,
       messages: [{ role: 'user', content: clientText }]
     })
   });
@@ -1942,9 +1944,10 @@ async function generateQuote() {
 
     // Convert to display format + ENRICH with all suppliers from catalogues
     const results = quoteItems.map((item, itemIdx) => {
-      // Get the originally requested potSize from the AI identification step
+      // Get the originally requested potSize and height from the AI identification step
       const originalPlant = plants[itemIdx] || {};
       const clientRequestedPotSize = originalPlant.potSize || 0;
+      const clientRequestedHeight = originalPlant.height || '';
       const matches = [];
 
       // Best match from Claude — find it in our data first
@@ -2019,7 +2022,8 @@ async function generateQuote() {
         selected: 0,
         aiPowered: true,
         // Pass along requested size for pre-selection
-        _requestedPotSize: clientRequestedPotSize
+        _requestedPotSize: clientRequestedPotSize,
+        _requestedHeight: clientRequestedHeight
       };
     });
 
@@ -2035,23 +2039,40 @@ async function generateQuote() {
       for (let i = 0; i < structured.length; i++) {
         const r = structured[i];
         const reqSize = results[i]._requestedPotSize || 0;
-        if (reqSize <= 0 || !r.varieties.length) continue;
+        const reqHeight = results[i]._requestedHeight || '';
+        if ((!reqSize && !reqHeight) || !r.varieties.length) continue;
 
-        // Find the best variety+size that has this potSize
         let bestVar = -1, bestSize = -1, bestDist = 999;
-        for (let vi = 0; vi < r.varieties.length; vi++) {
-          for (let si = 0; si < r.varieties[vi].sizes.length; si++) {
-            const sg = r.varieties[vi].sizes[si];
-            if (sg.potSizeNum > 0) {
-              const dist = Math.abs(sg.potSizeNum - reqSize);
-              if (dist < bestDist) {
-                bestDist = dist;
-                bestVar = vi;
-                bestSize = si;
+
+        if (reqSize > 0) {
+          // Match by pot size
+          for (let vi = 0; vi < r.varieties.length; vi++) {
+            for (let si = 0; si < r.varieties[vi].sizes.length; si++) {
+              const sg = r.varieties[vi].sizes[si];
+              if (sg.potSizeNum > 0) {
+                const dist = Math.abs(sg.potSizeNum - reqSize);
+                if (dist < bestDist) { bestDist = dist; bestVar = vi; bestSize = si; }
+              }
+            }
+          }
+        } else if (reqHeight) {
+          // Match by height — find variant whose height contains the requested range
+          const reqNorm = reqHeight.replace(/\s/g, '').toLowerCase();
+          for (let vi = 0; vi < r.varieties.length; vi++) {
+            for (let si = 0; si < r.varieties[vi].sizes.length; si++) {
+              const sg = r.varieties[vi].sizes[si];
+              const sup = sg.suppliers[0];
+              const h = (sup.height || '').replace(/\s/g, '').toLowerCase();
+              if (h && (h.includes(reqNorm) || reqNorm.includes(h.replace('cm','')))) {
+                // Exact height match — prioritize PIDF
+                const isPidf = isPIDFSupplier(sup.supplier) ? 0 : 1;
+                const dist = isPidf; // PIDF = 0 (best), others = 1
+                if (dist < bestDist) { bestDist = dist; bestVar = vi; bestSize = si; }
               }
             }
           }
         }
+
         if (bestVar >= 0 && bestDist <= 2) {
           results[i].selectedVariety = bestVar;
           results[i].selectedSize = bestSize;
