@@ -2295,17 +2295,68 @@ function structureResults(results) {
   return results.map(r => {
     if (r.matches.length === 0) return { ...r, varieties: [], selectedVariety: 0, selectedSize: 0, selectedSupplier: 0 };
 
-    // Group by unique plant name
-    const nameMap = {};
-    for (const m of r.matches) {
-      if (!nameMap[m.name]) {
-        nameMap[m.name] = { name: m.name, score: m.score, items: [] };
-      }
-      nameMap[m.name].items.push(m);
-      nameMap[m.name].score = Math.max(nameMap[m.name].score, m.score);
+    // Group by CULTIVAR + FORM — merge same plants from different suppliers
+    function extractCultivarKey(item) {
+      const n = (item.name || '').toLowerCase()
+        .replace(/photinia\s*(x\s*)?fraseri\s*/i, 'photinia ')
+        .replace(/photinia\s*serrulata\s*/i, 'photinia ')
+        .replace(/\(r\)/g, '').replace(/'/g, '').replace(/['']/g, '')
+        .replace(/\(\s*(en\s*)?(touffe|tige|palissade)\s*\)/gi, '')
+        .replace(/\ben\s+(touffe|tige|palissade|boule)\b/gi, '')
+        .replace(/\s+/g, ' ').trim();
+      // Detect form
+      const nameLower = item.name.toLowerCase();
+      const formeLower = (item.forme || '').toLowerCase();
+      let form = '';
+      if (formeLower.includes('tige') || nameLower.includes('tige')) form = 'tige';
+      else if (formeLower.includes('boule') || nameLower.includes('boule')) form = 'boule';
+      else if (formeLower.includes('palissade') || formeLower.includes('espalier') || nameLower.includes('palissade')) form = 'palissade';
+      else if (formeLower.includes('cone') || nameLower.includes('cone')) form = 'cone';
+      else if (nameLower.includes('torsad')) form = 'torsade';
+      else if (nameLower.includes('mini-tige') || formeLower.includes('mini tige')) form = 'mini-tige';
+      else if (nameLower.includes('demi-tige') || formeLower.includes('demi-tige')) form = 'demi-tige';
+      else form = 'touffe';
+      return n.replace(/(en\s*)?(touffe|tige|palissade|boule|troncs?\s*torsad[eé]s?|mini[- ]tige|demi[- ]tige)/gi, '').trim() + '|' + form;
     }
 
-    const varieties = Object.values(nameMap).sort((a, b) => b.score - a.score);
+    function cleanVarietyName(items) {
+      // Pick the best display name: prefer PIDF name, then shortest clean name
+      const pidfItem = items.find(m => isPIDFSupplier(m.supplier));
+      if (pidfItem) return pidfItem.name;
+      // Use shortest name from catalogue
+      return items.map(m => m.name).sort((a, b) => a.length - b.length)[0];
+    }
+
+    const cultivarMap = {};
+    for (const m of r.matches) {
+      const key = extractCultivarKey(m);
+      if (!cultivarMap[key]) {
+        cultivarMap[key] = { items: [], score: m.score };
+      }
+      cultivarMap[key].items.push(m);
+      cultivarMap[key].score = Math.max(cultivarMap[key].score, m.score);
+    }
+
+    const varieties = Object.entries(cultivarMap).map(([key, data]) => {
+      const form = key.split('|')[1];
+      const displayName = cleanVarietyName(data.items);
+      const formLabel = form !== 'touffe' ? ` (${form})` : '';
+      return {
+        name: displayName,
+        displayLabel: displayName + formLabel,
+        score: data.score,
+        items: data.items
+      };
+    }).sort((a, b) => {
+      // PIDF varieties first, then by score, then by review count
+      const aHasPidf = a.items.some(m => isPIDFSupplier(m.supplier)) ? 1 : 0;
+      const bHasPidf = b.items.some(m => isPIDFSupplier(m.supplier)) ? 1 : 0;
+      if (aHasPidf !== bHasPidf) return bHasPidf - aHasPidf;
+      if (Math.abs(a.score - b.score) > 0.1) return b.score - a.score;
+      const aReviews = Math.max(...a.items.map(m => m.reviews || 0));
+      const bReviews = Math.max(...b.items.map(m => m.reviews || 0));
+      return bReviews - aReviews;
+    });
 
     // Within each variety: group by potSize, keep ALL suppliers per size
     for (const v of varieties) {
@@ -2443,8 +2494,8 @@ function renderResults(results) {
     // --- Variety dropdown ---
     let varietyHtml = `<select class="variety-select" onchange="switchVariety(${i}, this.value)">`;
     r.varieties.forEach((v, vi) => {
-      const pct = Math.round(v.score * 100);
-      varietyHtml += `<option value="${vi}" ${vi === selVar ? 'selected' : ''}>${v.name} (${pct}%)</option>`;
+      const label = v.displayLabel || v.name;
+      varietyHtml += `<option value="${vi}" ${vi === selVar ? 'selected' : ''}>${label}</option>`;
     });
     varietyHtml += '</select>';
 
