@@ -2279,7 +2279,11 @@ function renderResults(results) {
     const selSize = Math.min(r.selectedSize, variety.sizes.length - 1);
     const sizeGroup = variety.sizes[selSize];
     const selSup = Math.min(r.selectedSupplier ?? 0, sizeGroup.suppliers.length - 1);
-    const current = sizeGroup.suppliers[selSup];
+    let current = sizeGroup.suppliers[selSup];
+    // If current has price 0, find a valid alternative
+    if (current.price <= 0 && sizeGroup.suppliers.length > 1) {
+      current = sizeGroup.suppliers.find(s => s.price > 0) || current;
+    }
 
     const pidf = isPIDFSupplier(current.supplier);
     const sellPrice = calculateSellPrice(current.price, pidf);
@@ -2367,7 +2371,11 @@ function renderResults(results) {
       }
     }
     for (const [supName, bestMatch] of Object.entries(supplierBest)) {
-      allSuppliersGlobal.push(bestMatch);
+      if (bestMatch.price > 0) allSuppliersGlobal.push(bestMatch);
+    }
+    // Remove any 0-price entries
+    while (allSuppliersGlobal.length > 0 && allSuppliersGlobal[0].price <= 0) {
+      allSuppliersGlobal.shift();
     }
 
     // ALWAYS show as dropdown
