@@ -2325,9 +2325,7 @@ function renderResults(results) {
       const formeInfo = cheapest.forme ? ' ' + cheapest.forme : '';
       const src = sg.isCurrent ? '' : ' [' + cheapest.supplier.substring(0, 15) + ']';
       const isSelected = sg.isCurrent && sg.potSizeNum === (sizeGroup ? sizeGroup.potSizeNum : -1);
-      const sizePrice = isPIDFSupplier(cheapest.supplier) ? cheapest.price : calculateSellPrice(cheapest.price, false);
-      const sizePriceTag = isPIDFSupplier(cheapest.supplier) ? '(vente)' : '';
-      sizeHtml += `<option value="${si}" ${isSelected ? 'selected' : ''}>${label}${heightInfo}${formeInfo}${src} — ${sizePrice.toFixed(2)}€</option>`;
+      sizeHtml += `<option value="${si}" ${isSelected ? 'selected' : ''}>${label}${heightInfo}${formeInfo}${src}</option>`;
     });
     sizeHtml += '</select>';
 
@@ -2374,10 +2372,7 @@ function renderResults(results) {
     // ALWAYS show as dropdown
     let supplierHtml = `<select class="supplier-select" onchange="switchSupplierGlobal(${i}, this.value)">`;
     allSuppliersGlobal.forEach((s, si) => {
-      const pidfSup = isPIDFSupplier(s.supplier);
-      const displayPrice = pidfSup ? s.price : calculateSellPrice(s.price, false);
-      const priceLabel = pidfSup ? s.price.toFixed(2) + '€ (vente)' : s.price.toFixed(2) + '€ → ' + displayPrice.toFixed(2) + '€';
-      supplierHtml += `<option value="${si}" ${si === 0 ? 'selected' : ''}>${s.supplier}${s.note} — ${priceLabel}</option>`;
+      supplierHtml += `<option value="${si}" ${si === 0 ? 'selected' : ''}>${s.supplier}${s.note}</option>`;
     });
     supplierHtml += '</select>';
 
