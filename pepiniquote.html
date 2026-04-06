@@ -1655,7 +1655,8 @@ Pour chaque plante:
 RÉPONDS UNIQUEMENT en JSON:
 [{"requested":"texte original","qty":5,"botanicalName":"Photinia","searchTerms":["photinia","photinia fraseri","photinia red robin"],"potSize":10,"height":"","forme":""}]
 
-searchTerms = variantes du nom à chercher dans les catalogues (nom commun, nom latin, variétés courantes). Mets au moins 3 termes.
+searchTerms = variantes du nom à chercher dans les catalogues (nom commun, nom latin, variétés courantes, noms italiens). Mets au moins 3 termes.
+IMPORTANT noms italiens des catalogues: rosier=ROSAI, olivier=OLEA, laurier=LAURUS, cyprès=CUPRESSUS, bambou=PHYLLOSTACHYS/FARGESIA, palmier=TRACHYCARPUS/CHAMAEROPS.
 potSize = litrage en litres (ex: 10 pour 10L). 0 si pas précisé.
 height = hauteur en cm si précisée (ex: "100/125" ou "150/200"). Vide si pas précisée.
 IMPORTANT: "100/125" ou "60/80" sont des HAUTEURS en cm, PAS des litrages. Un photinia 100/125 = un photinia de 100 à 125cm de haut.`,
@@ -2035,10 +2036,31 @@ async function generateQuote() {
       const requestedColor = colorKeywords.find(c => reqText.includes(c)) || '';
 
       // Use the GENUS name (first word) as the primary search key
+      // Include translations FR→IT/Latin for catalogue matching
+      const genusTranslations = {
+        'rosier': ['rosai'], 'olivier': ['olea'], 'laurier': ['laurus', 'prunus'],
+        'citronnier': ['citrus'], 'palmier': ['trachycarpus', 'chamaerops', 'phoenix', 'washingtonia'],
+        'bambou': ['phyllostachys', 'fargesia', 'bambusa'], 'cypres': ['cupressus', 'cupressocyparis'],
+        'glycine': ['wisteria'], 'lavande': ['lavandula'], 'erable': ['acer'],
+        'hortensia': ['hydrangea'], 'jasmin': ['trachelospermum', 'jasminum'],
+        'magnolia': ['magnolia'], 'camellia': ['camellia'], 'cerisier': ['prunus'],
+        'pommier': ['malus'], 'poirier': ['pyrus'], 'figuier': ['ficus'],
+        'mimosa': ['acacia'], 'bougainvillier': ['bougainvillea'], 'hibiscus': ['hibiscus'],
+        'romarin': ['rosmarinus'], 'thym': ['thymus'], 'sauge': ['salvia']
+      };
       const genusNames = new Set();
       for (const m of matches) {
         const firstWord = normalize(m.name).split(' ').find(t => t.length > 3);
-        if (firstWord) genusNames.add(firstWord);
+        if (firstWord) {
+          genusNames.add(firstWord);
+          // Add translations
+          const translations = genusTranslations[firstWord];
+          if (translations) translations.forEach(t => genusNames.add(t));
+        }
+      }
+      // Also add translations from the request text
+      for (const [fr, its] of Object.entries(genusTranslations)) {
+        if (reqText.includes(fr)) its.forEach(t => genusNames.add(t));
       }
       // Also extract secondary keywords (species/cultivar) for better filtering
       const secondaryWords = new Set();
@@ -2049,18 +2071,40 @@ async function generateQuote() {
 
       const allSuppliers = suppliers.filter(Boolean);
 
+      // Also extract form/shape keywords from the client request for matching catalogue formes
+      const formKeywordsMap = {
+        'arche': ['arc', 'arche'], 'tonneau': ['tonnelle', 'tonneau'], 'tige': ['tige', 'dt'],
+        'boule': ['boule'], 'cone': ['cone'], 'palissade': ['palisse', 'palissade', 'espalier'],
+        'spirale': ['spirale'], 'pergola': ['pergola'], 'grimpant': ['grimpant', 'rampicanti'],
+        'pyramide': ['piram', 'pyramide'], 'parasol': ['parasol'], 'plateau': ['plateau'],
+        'colonne': ['colomne', 'colonne', 'cilindro']
+      };
+      const reqFormWords = [];
+      for (const [word, catalogForms] of Object.entries(formKeywordsMap)) {
+        if (reqText.includes(word)) reqFormWords.push(...catalogForms);
+      }
+      // Also check raw words from request against forme field
+      const reqRawWords = reqText.split(/\s+/).filter(w => w.length > 2);
+
       for (const sup of allSuppliers) {
         for (const plant of sup.data) {
           const plantNorm = normalize(plant.name);
-          // Must contain the genus name (e.g. "photinia")
+          const plantForme = (plant.forme || '').toLowerCase();
+          // Must contain the genus name (e.g. "photinia", "rosai")
           let genusMatch = false;
           for (const genus of genusNames) {
             if (plantNorm.includes(genus)) { genusMatch = true; break; }
           }
           if (!genusMatch) continue;
 
+          // If client asked for a specific form, filter by it
+          if (reqFormWords.length > 0) {
+            const formeMatch = reqFormWords.some(f => plantForme.includes(f) || plantNorm.includes(f));
+            if (!formeMatch && plantForme) continue; // Skip plants with wrong forme
+          }
+
           // Genus matches - include this plant
-          const exists = matches.find(x => x.name === plant.name && x.supplier === sup.name && x.potSize === plant.potSize && x.height === plant.height);
+          const exists = matches.find(x => x.name === plant.name && x.supplier === sup.name && x.potSize === plant.potSize && x.height === plant.height && x.forme === plant.forme);
           if (!exists) {
             // Check color compatibility
             const plantFullText = (plantNorm + ' ' + (plant.height || '')).toLowerCase();
@@ -2471,14 +2515,38 @@ function renderResults(results) {
     const selVar = Math.min(r.selectedVariety, r.varieties.length - 1);
     const variety = r.varieties[selVar];
 
-    // --- Step 1: Get ALL unique suppliers for this variety ---
+    // --- Step 1: Get ALL unique suppliers for this variety + cross-variety by form ---
     const supplierNames = [];
     const seenSupNames = new Set();
+    // Direct suppliers from this variety
     for (const sg of variety.sizes) {
       for (const s of sg.suppliers) {
         if (s.price > 0 && !seenSupNames.has(s.supplier)) {
           seenSupNames.add(s.supplier);
           supplierNames.push(s.supplier);
+        }
+      }
+    }
+    // Cross-variety: find suppliers from other varieties that have matching form/keywords
+    const varNameLower = (variety.name || variety.displayLabel || '').toLowerCase();
+    for (const otherVar of r.varieties) {
+      if (otherVar === variety) continue;
+      const otherNameLower = (otherVar.name || otherVar.displayLabel || '').toLowerCase();
+      // Check if they share a distinctive keyword (form)
+      const varWords = varNameLower.split(/\s+/).filter(w => w.length > 3);
+      const otherWords = otherNameLower.split(/\s+/).filter(w => w.length > 3);
+      const sharedForm = varWords.some(w => otherWords.includes(w) || otherNameLower.includes(w));
+      // Also check forme field
+      for (const sg of otherVar.sizes) {
+        for (const s of sg.suppliers) {
+          if (s.price > 0 && !seenSupNames.has(s.supplier)) {
+            const formeLower = (s.forme || '').toLowerCase();
+            const hasMatchingForme = varWords.some(w => formeLower.includes(w.substring(0, 3)));
+            if (sharedForm || hasMatchingForme) {
+              seenSupNames.add(s.supplier);
+              supplierNames.push(s.supplier);
+            }
+          }
         }
       }
     }
@@ -2490,11 +2558,29 @@ function renderResults(results) {
     const selSup = Math.min(r.selectedSupplier ?? 0, supplierNames.length - 1);
     const selectedSupplierName = supplierNames[selSup] || supplierNames[0];
 
-    // --- Step 3: Get sizes for this supplier ---
+    // --- Step 3: Get sizes for this supplier (search current variety + cross-variety) ---
     const supplierSizes = [];
+    const seenPotSizes = new Set();
+    // First from current variety
     for (const sg of variety.sizes) {
       const supMatch = sg.suppliers.find(s => s.supplier === selectedSupplierName);
-      if (supMatch) supplierSizes.push({ potSizeNum: sg.potSizeNum, item: supMatch });
+      if (supMatch && !seenPotSizes.has(sg.potSizeNum + '|' + supMatch.height)) {
+        seenPotSizes.add(sg.potSizeNum + '|' + supMatch.height);
+        supplierSizes.push({ potSizeNum: sg.potSizeNum, item: supMatch });
+      }
+    }
+    // If not enough, search other varieties for this supplier
+    if (supplierSizes.length === 0) {
+      for (const otherVar of r.varieties) {
+        if (otherVar === variety) continue;
+        for (const sg of otherVar.sizes) {
+          const supMatch = sg.suppliers.find(s => s.supplier === selectedSupplierName);
+          if (supMatch && !seenPotSizes.has(sg.potSizeNum + '|' + supMatch.height)) {
+            seenPotSizes.add(sg.potSizeNum + '|' + supMatch.height);
+            supplierSizes.push({ potSizeNum: sg.potSizeNum, item: supMatch });
+          }
+        }
+      }
     }
     supplierSizes.sort((a, b) => a.potSizeNum - b.potSizeNum);
 
