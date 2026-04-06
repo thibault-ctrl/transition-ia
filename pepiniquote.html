@@ -2133,14 +2133,21 @@ async function generateQuote() {
         }
       }
 
-      // Also add live search results (Fleur Pro, PIDF live) directly to matches
+      // Add live search results that match THIS plant's search terms
       const live = window._liveSearchResults || [];
+      const plantSearchTerms = (originalPlant.searchTerms || []).map(t => t.toLowerCase());
       for (const lr of live) {
-        if (lr.price > 0) {
-          const exists = matches.find(x => x.name === lr.name && x.supplier === lr.supplier && x.potSize === lr.potSize);
-          if (!exists) {
-            matches.push({ ...lr, score: 0.8 });
-          }
+        if (lr.price <= 0) continue;
+        // Check if this live result matches the plant's search terms
+        const lrName = (lr.name || '').toLowerCase();
+        const isRelevant = plantSearchTerms.some(term => {
+          const termWords = term.split(/\s+/).filter(w => w.length > 3);
+          return termWords.some(w => lrName.includes(w));
+        });
+        if (!isRelevant) continue;
+        const exists = matches.find(x => x.name === lr.name && x.supplier === lr.supplier && x.potSize === lr.potSize);
+        if (!exists) {
+          matches.push({ ...lr, score: 0.8 });
         }
       }
 
