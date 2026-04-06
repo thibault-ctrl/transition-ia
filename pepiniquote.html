@@ -2534,37 +2534,16 @@ function renderResults(results) {
     const selVar = Math.min(r.selectedVariety, r.varieties.length - 1);
     const variety = r.varieties[selVar];
 
-    // --- Step 1: Get ALL unique suppliers for this variety + cross-variety by form ---
+    // --- Step 1: Get ALL unique suppliers across ALL varieties ---
     const supplierNames = [];
     const seenSupNames = new Set();
-    // Direct suppliers from this variety
-    for (const sg of variety.sizes) {
-      for (const s of sg.suppliers) {
-        if (s.price > 0 && !seenSupNames.has(s.supplier)) {
-          seenSupNames.add(s.supplier);
-          supplierNames.push(s.supplier);
-        }
-      }
-    }
-    // Cross-variety: find suppliers from other varieties that have matching form/keywords
-    const varNameLower = (variety.name || variety.displayLabel || '').toLowerCase();
-    for (const otherVar of r.varieties) {
-      if (otherVar === variety) continue;
-      const otherNameLower = (otherVar.name || otherVar.displayLabel || '').toLowerCase();
-      // Check if they share a distinctive keyword (form)
-      const varWords = varNameLower.split(/\s+/).filter(w => w.length > 3);
-      const otherWords = otherNameLower.split(/\s+/).filter(w => w.length > 3);
-      const sharedForm = varWords.some(w => otherWords.includes(w) || otherNameLower.includes(w));
-      // Also check forme field
-      for (const sg of otherVar.sizes) {
+    // Collect from ALL varieties (not just current one)
+    for (const v of r.varieties) {
+      for (const sg of v.sizes) {
         for (const s of sg.suppliers) {
           if (s.price > 0 && !seenSupNames.has(s.supplier)) {
-            const formeLower = (s.forme || '').toLowerCase();
-            const hasMatchingForme = varWords.some(w => formeLower.includes(w.substring(0, 3)));
-            if (sharedForm || hasMatchingForme) {
-              seenSupNames.add(s.supplier);
-              supplierNames.push(s.supplier);
-            }
+            seenSupNames.add(s.supplier);
+            supplierNames.push(s.supplier);
           }
         }
       }
