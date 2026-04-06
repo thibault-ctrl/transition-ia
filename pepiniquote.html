@@ -2274,7 +2274,7 @@ function renderResults(results) {
       const heightInfo = cheapest.height ? ' H:' + cheapest.height : '';
       const formeInfo = cheapest.forme ? ' ' + cheapest.forme : '';
       const src = sg.isCurrent ? '' : ' [' + cheapest.supplier.substring(0, 15) + ']';
-      const isSelected = sg.isCurrent && variety.sizes.indexOf(sg) === selSize;
+      const isSelected = sg.isCurrent && sg.potSizeNum === (sizeGroup ? sizeGroup.potSizeNum : -1);
       sizeHtml += `<option value="${si}" ${isSelected ? 'selected' : ''}>${label}${heightInfo}${formeInfo}${src} — ${cheapest.price.toFixed(2)}€</option>`;
     });
     sizeHtml += '</select>';
