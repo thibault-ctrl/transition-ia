@@ -2554,7 +2554,7 @@ function switchSupplier(rowIndex, supIndex) {
 function switchSizeGlobal(rowIndex, sizeIndex) {
   const r = window._quoteResults[rowIndex];
   r.selectedSize = parseInt(sizeIndex);
-  r.selectedSupplier = 0;
+  // Keep the current supplier — don't reset to 0
   renderResults(window._quoteResults);
 }
 
