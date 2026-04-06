@@ -1851,42 +1851,29 @@ function searchExcelCatalogues(searchTerms, potSize) {
 async function searchFleurPro(searchTerms) {
   try {
     const results = [];
+
+    // Try server proxy first
     for (const term of searchTerms.slice(0, 2)) {
-      const resp = await fetch(`/proxy/fleur?q=${encodeURIComponent(term)}`);
-      const html = await resp.text();
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(html, 'text/html');
-
-      const text = doc.body.innerText;
-      const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-
-      for (let i = 0; i < lines.length; i++) {
-        if (lines[i].match(/\b[Cc]\s?\d/) && lines[i].match(/[A-Z][a-z]/) && lines[i].length > 8 && lines[i].length < 120) {
-          const name = lines[i];
-          let price = 0;
-          for (let j = i + 1; j < Math.min(i + 8, lines.length); j++) {
-            const priceMatch = lines[j].match(/([\d]+[,.][\d]+)\s*1\+/);
-            if (priceMatch) {
-              price = parseFloat(priceMatch[1].replace(',', '.'));
-              break;
+      try {
+        const resp = await fetch(`/proxy/fleur?q=${encodeURIComponent(term)}`);
+        const data = await resp.json();
+        if (data.products && data.products.length > 0) {
+          for (const p of data.products) {
+            const exists = results.find(r => r.name === p.name && r.potSize === p.potSize);
+            if (!exists) {
+              results.push({
+                name: p.name, price: p.price,
+                potSize: p.potSize, potSizeNum: p.potSizeNum || 0,
+                height: p.height || '', forme: p.forme || '',
+                cond: 'C', sizeInfo: '',
+                supplier: 'Fleur Pro', source: 'fleur', score: 0.9
+              });
             }
           }
-          if (price > 0) {
-            const potMatch = name.match(/C\s*(\d+[,.]?\d*)\s*L/i);
-            const potSize = potMatch ? potMatch[1].replace(',', '.') : '';
-            results.push({
-              name, price,
-              potSize,
-              potSizeNum: potSize ? parseInt(potSize) : 0,
-              cond: 'C', height: '', forme: '',
-              supplier: 'Fleur Pro',
-              source: 'fleur',
-              score: 0.9
-            });
-          }
         }
-      }
+      } catch(e) {}
     }
+
     return results;
   } catch (e) {
     console.warn('Fleur Pro search error:', e);

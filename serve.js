@@ -153,11 +153,68 @@ http.createServer((req, res) => {
     return;
   }
 
-  // PROXY: /proxy/fleur?q=...  → Fleur Pro search
+  // PROXY: /proxy/fleur?q=...  → Fleur Pro search (with auth)
   if (pathname === '/proxy/fleur') {
     const q = parsedUrl.query.q || '';
-    const targetUrl = `https://www.fleurproshop.com/fr/recherche/?search=${encodeURIComponent(q)}`;
-    return proxyRequest(targetUrl, res);
+    (async () => {
+      try {
+        // Step 1: Login to get session cookie
+        if (!global._fleurCookies) {
+          // Get login page for session cookie
+          const loginPage = await fetch('https://www.fleurproshop.com/fr/connexion/');
+          const cookies = loginPage.headers.getSetCookie ? loginPage.headers.getSetCookie() : [];
+          const sessionCookie = cookies.map(c => c.split(';')[0]).join('; ');
+
+          // Submit login with correct field names
+          const authResp = await fetch('https://www.fleurproshop.com/fr/connexion/', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'Cookie': sessionCookie
+            },
+            body: 'login%5Bemail%5D=planteidf%40gmail.com&login%5Bpassword%5D=D2690',
+            redirect: 'manual'
+          });
+          const authCookies = authResp.headers.getSetCookie ? authResp.headers.getSetCookie() : [];
+          global._fleurCookies = [sessionCookie, ...authCookies.map(c => c.split(';')[0])].join('; ');
+          console.log('Fleur Pro login:', authResp.status, 'cookies:', authCookies.length);
+        }
+
+        // Step 2: Search
+        const searchResp = await fetch('https://www.fleurproshop.com/fr/recherche/?search=' + encodeURIComponent(q), {
+          headers: { 'Cookie': global._fleurCookies }
+        });
+        const html = await searchResp.text();
+
+        // Step 3: Parse results
+        const products = [];
+        const lines = html.split('\n').map(l => l.trim()).filter(Boolean);
+        for (let i = 0; i < lines.length; i++) {
+          if (lines[i].match(/\b[Cc]\s?\d/) && lines[i].match(/[A-Z][a-z]/) && lines[i].length > 8 && lines[i].length < 120) {
+            const name = lines[i];
+            let price = 0;
+            for (let j = i + 1; j < Math.min(i + 8, lines.length); j++) {
+              const priceMatch = lines[j].match(/([\d]+[,.][\d]+)\s*1\+/);
+              if (priceMatch) { price = parseFloat(priceMatch[1].replace(',', '.')); break; }
+            }
+            if (price > 0) {
+              const potMatch = name.match(/C\s*(\d+[,.]?\d*)\s*L/i);
+              const potSize = potMatch ? potMatch[1].replace(',', '.') : '';
+              const heightMatch = name.match(/(\d{2,3}\/\d{2,3})/);
+              const formeMatch = name.match(/\b(TIGE|DT|DEMI-TIGE|BOULE|CONE|ESPALIER|PALISSE|ARC)\b/i);
+              products.push({ name, price, potSize, potSizeNum: potSize ? parseInt(potSize) : 0, height: heightMatch ? heightMatch[1] : '', forme: formeMatch ? formeMatch[1] : '' });
+            }
+          }
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        res.end(JSON.stringify({ products: products.slice(0, 30) }));
+      } catch (err) {
+        res.writeHead(502);
+        res.end(JSON.stringify({ error: err.message }));
+      }
+    })();
+    return;
   }
 
   // STATIC FILES
