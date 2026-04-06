@@ -1852,8 +1852,7 @@ async function searchFleurPro(searchTerms) {
   try {
     const results = [];
 
-    // Try server proxy first
-    for (const term of searchTerms.slice(0, 2)) {
+    for (const term of searchTerms.slice(0, 1)) {
       try {
         const resp = await fetch(`/proxy/fleur?q=${encodeURIComponent(term)}`);
         const data = await resp.json();
@@ -2130,6 +2129,17 @@ async function generateQuote() {
               supplier: sup.name,
               score: secHits > 0 ? 0.85 : 0.7
             });
+          }
+        }
+      }
+
+      // Also add live search results (Fleur Pro, PIDF live) directly to matches
+      const live = window._liveSearchResults || [];
+      for (const lr of live) {
+        if (lr.price > 0) {
+          const exists = matches.find(x => x.name === lr.name && x.supplier === lr.supplier && x.potSize === lr.potSize);
+          if (!exists) {
+            matches.push({ ...lr, score: 0.8 });
           }
         }
       }

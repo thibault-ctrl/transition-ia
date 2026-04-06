@@ -180,33 +180,59 @@ http.createServer((req, res) => {
           console.log('Fleur Pro login:', authResp.status, 'cookies:', authCookies.length);
         }
 
-        // Step 2: Search
-        const searchResp = await fetch('https://www.fleurproshop.com/fr/recherche/?search=' + encodeURIComponent(q), {
+        // Step 2: Search (correct URL is /fr/assortiment/?s=)
+        const searchUrl = 'https://www.fleurproshop.com/fr/assortiment/?s=' + encodeURIComponent(q);
+        const searchResp = await fetch(searchUrl, {
           headers: { 'Cookie': global._fleurCookies }
         });
         const html = await searchResp.text();
+        console.log('Fleur HTML size:', html.length, 'has C 5L:', html.includes('C 5L'));
 
-        // Step 3: Parse results
+        // Step 3: Parse results from HTML
         const products = [];
-        const lines = html.split('\n').map(l => l.trim()).filter(Boolean);
+        // Extract product names
+        const prodNames = [...html.matchAll(/>([A-Z][a-z]+[^<]{5,80}(?:fraseri|japonica|sinensis|europaea|varieta|banksiae|officinalis|lamarckii|palmatum)[^<]*)<\//gi)];
+        let currentName = '';
+
+        // Extract sizes and prices using the table structure
+        const sizeMatches = [...html.matchAll(/>(C\s*\d+[^<]{0,20}L?|P\d+)[^<]*<\/td>/gi)];
+        const priceMatches = [...html.matchAll(/€\s*([\d,]+)\s*<sup>(\d+)<\/sup>/g)];
+
+        // Simpler approach: find all product blocks
+        const text = html.replace(/<\/?\w[^>]*>/g, '\n').replace(/&euro;/gi, '€').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&#\d+;/g, ' ').replace(/&\w+;/g, ' ');
+        const lines = text.split(/\n+/).map(l => l.trim()).filter(l => l.length > 0);
+
         for (let i = 0; i < lines.length; i++) {
-          if (lines[i].match(/\b[Cc]\s?\d/) && lines[i].match(/[A-Z][a-z]/) && lines[i].length > 8 && lines[i].length < 120) {
-            const name = lines[i];
-            let price = 0;
-            for (let j = i + 1; j < Math.min(i + 8, lines.length); j++) {
-              const priceMatch = lines[j].match(/([\d]+[,.][\d]+)\s*1\+/);
-              if (priceMatch) { price = parseFloat(priceMatch[1].replace(',', '.')); break; }
-            }
-            if (price > 0) {
-              const potMatch = name.match(/C\s*(\d+[,.]?\d*)\s*L/i);
-              const potSize = potMatch ? potMatch[1].replace(',', '.') : '';
-              const heightMatch = name.match(/(\d{2,3}\/\d{2,3})/);
-              const formeMatch = name.match(/\b(TIGE|DT|DEMI-TIGE|BOULE|CONE|ESPALIER|PALISSE|ARC)\b/i);
-              products.push({ name, price, potSize, potSizeNum: potSize ? parseInt(potSize) : 0, height: heightMatch ? heightMatch[1] : '', forme: formeMatch ? formeMatch[1] : '' });
+          // Product name
+          if (lines[i].match(/^[A-Z][a-z]/) && lines[i].length > 10 && lines[i].length < 120 && !lines[i].match(/^(Taille|Photo|Prix|Quantit|Votre|Nom|Hauteur|Dispo|Plus d|STARTPRIJS|zt\d|Recherche|Afficher|Liste|Trier|Actions|Description|Jardinerie|Jeunes|Garden|Produit|Cacher)/)) {
+            currentName = lines[i].trim();
+          }
+          // Size pattern: C 5L, P27, C 40CM DT
+          if (lines[i].match(/^C\s*\d|^P\d/i) && lines[i].length < 30 && currentName) {
+            const taille = lines[i].trim();
+            // Find price in next few lines
+            for (let j = i + 1; j < Math.min(i + 10, lines.length); j++) {
+              const priceMatch = lines[j].match(/['>€\s]([\d]+[,.][\d]+)/);
+              if (priceMatch && parseFloat(priceMatch[1].replace(',', '.')) > 1) {
+                const price = parseFloat(priceMatch[1].replace(',', '.'));
+                const potMatch = taille.match(/(\d+)\s*L/i);
+                const potSize = potMatch ? potMatch[1] : '';
+                const heightMatch = taille.match(/(\d{2,3}\/[\d+]+)/);
+                const formeMatch = taille.match(/\b(DT|TIGE)\b/i);
+                products.push({
+                  name: currentName + ' ' + taille,
+                  price, potSize,
+                  potSizeNum: potSize ? parseInt(potSize) : 0,
+                  height: heightMatch ? heightMatch[1] : '',
+                  forme: formeMatch ? formeMatch[1] : ''
+                });
+                break;
+              }
             }
           }
         }
 
+        console.log('Fleur parsed:', products.length, 'products');
         res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
         res.end(JSON.stringify({ products: products.slice(0, 30) }));
       } catch (err) {
