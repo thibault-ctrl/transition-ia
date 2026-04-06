@@ -2045,29 +2045,42 @@ async function generateQuote() {
         let bestVar = -1, bestSize = -1, bestDist = 999;
 
         if (reqSize > 0) {
-          // Match by pot size
+          // Match by pot size — prioritize PIDF + most reviews
+          let bestReviews = -1;
           for (let vi = 0; vi < r.varieties.length; vi++) {
             for (let si = 0; si < r.varieties[vi].sizes.length; si++) {
               const sg = r.varieties[vi].sizes[si];
               if (sg.potSizeNum > 0) {
                 const dist = Math.abs(sg.potSizeNum - reqSize);
-                if (dist < bestDist) { bestDist = dist; bestVar = vi; bestSize = si; }
+                if (dist < bestDist || (dist === bestDist && (sg.suppliers[0].reviews || 0) > bestReviews)) {
+                  const sup = sg.suppliers[0];
+                  bestDist = dist;
+                  bestReviews = sup.reviews || 0;
+                  bestVar = vi;
+                  bestSize = si;
+                }
               }
             }
           }
         } else if (reqHeight) {
           // Match by height — find variant whose height contains the requested range
+          // Prioritize: PIDF first, then by review count (most popular)
           const reqNorm = reqHeight.replace(/\s/g, '').toLowerCase();
+          let bestReviews = -1;
           for (let vi = 0; vi < r.varieties.length; vi++) {
             for (let si = 0; si < r.varieties[vi].sizes.length; si++) {
               const sg = r.varieties[vi].sizes[si];
               const sup = sg.suppliers[0];
               const h = (sup.height || '').replace(/\s/g, '').toLowerCase();
               if (h && (h.includes(reqNorm) || reqNorm.includes(h.replace('cm','')))) {
-                // Exact height match — prioritize PIDF
-                const isPidf = isPIDFSupplier(sup.supplier) ? 0 : 1;
-                const dist = isPidf; // PIDF = 0 (best), others = 1
-                if (dist < bestDist) { bestDist = dist; bestVar = vi; bestSize = si; }
+                const pidfBonus = isPIDFSupplier(sup.supplier) ? 10000 : 0;
+                const reviewScore = (sup.reviews || 0) + pidfBonus;
+                if (reviewScore > bestReviews) {
+                  bestReviews = reviewScore;
+                  bestDist = 0;
+                  bestVar = vi;
+                  bestSize = si;
+                }
               }
             }
           }
