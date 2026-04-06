@@ -808,6 +808,10 @@ body {
   <div class="page active" id="page-dashboard">
     <h1 class="page-title">Catalogues fournisseurs</h1>
     <p class="page-subtitle">Glissez-déposez vos fichiers Excel ou CSV pour charger les catalogues</p>
+    <div style="margin-bottom:16px">
+      <button class="btn btn-secondary" onclick="refreshPIDF()" id="refreshPidfBtn">Actualiser PIDF (scraper le site)</button>
+      <span id="refreshPidfStatus" style="margin-left:12px;font-size:13px;color:#6b6b6b;"></span>
+    </div>
     <div class="suppliers-grid" id="suppliersGrid"></div>
   </div>
 
@@ -2565,6 +2569,110 @@ function switchSizeGlobal(rowIndex, sizeIndex) {
   r.selectedSize = parseInt(sizeIndex);
   // Keep the current supplier — don't reset to 0
   renderResults(window._quoteResults);
+}
+
+// ============ REFRESH PIDF ============
+async function refreshPIDF() {
+  const btn = document.getElementById('refreshPidfBtn');
+  const status = document.getElementById('refreshPidfStatus');
+  btn.disabled = true;
+  btn.textContent = 'Scraping en cours...';
+  status.textContent = '';
+
+  try {
+    // Open PIDF site in a popup to get Cloudflare cookies
+    const popup = window.open('https://les-plantes-ile-de-france.com', 'pidf_scrape', 'width=400,height=300');
+    status.textContent = 'Ouverture du site PIDF...';
+
+    // Wait for popup to load
+    await new Promise(resolve => setTimeout(resolve, 3000));
+
+    // Scrape from the popup
+    const allProducts = [];
+    let page = 1;
+    const products = [];
+
+    while (true) {
+      status.textContent = `Chargement page ${page}...`;
+      const r = await popup.fetch('/products.json?limit=250&page=' + page);
+      const d = await r.json();
+      if (!d.products || d.products.length === 0) break;
+      products.push(...d.products);
+      page++;
+      if (d.products.length < 250) break;
+    }
+
+    status.textContent = `${products.length} produits trouvés. Scraping des litrages...`;
+
+    // Scrape pot sizes in batches of 10
+    for (let i = 0; i < products.length; i += 10) {
+      const batch = products.slice(i, i + 10);
+      status.textContent = `Litrages: ${i}/${products.length}...`;
+
+      const results = await Promise.all(batch.map(async p => {
+        let potSizeMap = {};
+        let reviewCount = 0;
+        try {
+          const resp = await popup.fetch('/products/' + p.handle);
+          const html = await resp.text();
+          // Extract pot sizes
+          for (const v of p.variants) {
+            const regex = new RegExp('"' + v.id + '":\\s*"(\\d+)"');
+            const m = html.match(regex);
+            if (m) potSizeMap[v.id] = parseInt(m[1]);
+          }
+          // Extract reviews
+          const revMatch = html.match(/(\\d+)\\s*avis/);
+          if (revMatch) reviewCount = parseInt(revMatch[1]);
+        } catch(e) {}
+
+        return p.variants.map(v => ({
+          name: p.title,
+          price: parseFloat(v.price),
+          potSize: potSizeMap[v.id] ? String(potSizeMap[v.id]) : '',
+          potSizeNum: potSizeMap[v.id] || 0,
+          height: v.title || '',
+          forme: '', cond: '', sizeInfo: v.title || '',
+          reviews: reviewCount,
+          available: v.available
+        }));
+      }));
+
+      allProducts.push(...results.flat());
+    }
+
+    popup.close();
+
+    // Update PIDF supplier in preload
+    const pidfIdx = suppliers.findIndex(s => s && s.name.includes('PIDF'));
+    if (pidfIdx >= 0) {
+      suppliers[pidfIdx].data = allProducts.filter(p => p.price > 0);
+      suppliers[pidfIdx].lastUpdate = new Date().toISOString();
+    } else {
+      suppliers[2] = {
+        id: Date.now(),
+        name: 'PIDF (Mon site)',
+        lastUpdate: new Date().toISOString(),
+        data: allProducts.filter(p => p.price > 0),
+        isPriceVente: true,
+        mapping: { nameCol: 'title', priceCol: 'price (vente)' }
+      };
+    }
+
+    saveToStorage();
+    renderSupplierCards();
+    updateSupplierCount();
+
+    status.textContent = `✅ ${allProducts.length} variantes scrapées avec litrages`;
+    showToast(`PIDF actualisé : ${allProducts.length} variantes`, 'success');
+  } catch (e) {
+    status.textContent = '❌ Erreur: ' + e.message;
+    console.error('PIDF refresh error:', e);
+    showToast('Erreur scraping PIDF: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Actualiser PIDF (scraper le site)';
+  }
 }
 
 function switchSupplierGlobal(rowIndex, supIndex) {
