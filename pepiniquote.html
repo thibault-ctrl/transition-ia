@@ -2375,11 +2375,61 @@ function renderResults(results) {
     const variety = r.varieties[selVar];
     const selSize = Math.min(r.selectedSize, variety.sizes.length - 1);
     const sizeGroup = variety.sizes[selSize];
-    const selSup = Math.min(r.selectedSupplier ?? 0, sizeGroup.suppliers.length - 1);
-    let current = sizeGroup.suppliers[selSup];
-    // If current has price 0, find a valid alternative
-    if (current.price <= 0 && sizeGroup.suppliers.length > 1) {
-      current = sizeGroup.suppliers.find(s => s.price > 0) || current;
+
+    // Build the full supplier list FIRST (including cross-variety matches)
+    // so we can use selectedSupplier to pick from this complete list
+    const allSuppliersForRow = [];
+    // Direct suppliers for this size
+    for (const s of sizeGroup.suppliers) {
+      if (s.price > 0) allSuppliersForRow.push({ ...s, note: '' });
+    }
+    // Cross-variety suppliers with same form + closest potSize
+    const currentPotSize = sizeGroup ? sizeGroup.potSizeNum : 0;
+    const varietyNameLower = variety.name.toLowerCase();
+    const currentItem = sizeGroup.suppliers[0] || {};
+    const currentForm = (currentItem.forme || '').toLowerCase();
+    const isTige = currentForm.includes('tige') || varietyNameLower.includes('tige');
+    const isBoule = currentForm.includes('boule') || varietyNameLower.includes('boule');
+    const isPalissade = currentForm.includes('palissade') || currentForm.includes('espalier') || varietyNameLower.includes('palissade');
+    const currentFormType = isTige ? 'tige' : isBoule ? 'boule' : isPalissade ? 'palissade' : '';
+
+    const supplierBest = {};
+    for (const v of r.varieties) {
+      if (v === variety) continue;
+      for (const sg of v.sizes) {
+        for (const s of sg.suppliers) {
+          if (s.price <= 0) continue;
+          if (allSuppliersForRow.find(x => x.supplier === s.supplier)) continue;
+          const itemForm = (s.forme || '').toLowerCase();
+          const varNameLower = v.name.toLowerCase();
+          let formMatch = !currentFormType;
+          if (currentFormType === 'tige') formMatch = itemForm.includes('tige') || varNameLower.includes('tige');
+          if (currentFormType === 'boule') formMatch = itemForm.includes('boule') || varNameLower.includes('boule');
+          if (currentFormType === 'palissade') formMatch = itemForm.includes('palissade') || itemForm.includes('espalier') || varNameLower.includes('palissade');
+          if (!formMatch && currentFormType) continue;
+          const dist = currentPotSize > 0 && sg.potSizeNum > 0 ? Math.abs(sg.potSizeNum - currentPotSize) : 999;
+          if (!supplierBest[s.supplier] || dist < supplierBest[s.supplier].dist) {
+            const rawPS = s.potSize || (sg.potSizeNum > 0 ? String(sg.potSizeNum) : '');
+            const psLabel = rawPS ? (rawPS.toUpperCase().endsWith('L') ? rawPS : rawPS + 'L') : '';
+            supplierBest[s.supplier] = { ...s, note: psLabel ? ` (${psLabel})` : '', dist };
+          }
+        }
+      }
+    }
+    for (const best of Object.values(supplierBest)) {
+      allSuppliersForRow.push(best);
+    }
+    // Put PIDF first
+    const pidfIdx = allSuppliersForRow.findIndex(s => isPIDFSupplier(s.supplier));
+    if (pidfIdx > 0) {
+      allSuppliersForRow.unshift(allSuppliersForRow.splice(pidfIdx, 1)[0]);
+    }
+
+    // Now pick current from the full supplier list
+    const selSup = Math.min(r.selectedSupplier ?? 0, allSuppliersForRow.length - 1);
+    let current = allSuppliersForRow[selSup] || sizeGroup.suppliers[0];
+    if (current.price <= 0) {
+      current = allSuppliersForRow.find(s => s.price > 0) || current;
     }
 
     const pidf = isPIDFSupplier(current.supplier);
@@ -2420,66 +2470,13 @@ function renderResults(results) {
     if (!window._allSizesMap) window._allSizesMap = {};
     window._allSizesMap[i] = allSizes;
 
-    // --- Supplier dropdown: show all suppliers for the SELECTED size of the SELECTED variety ---
-    const allSuppliersGlobal = [];
-    // All suppliers for this exact size group
-    if (sizeGroup) {
-      for (const s of sizeGroup.suppliers) {
-        if (s.price > 0) allSuppliersGlobal.push({ ...s, note: '' });
-      }
-    }
-    // Also look across other varieties for the same form (TIGE, BOULE, etc.) + closest potSize
-    const currentPotSize = sizeGroup ? sizeGroup.potSizeNum : 0;
-    // Detect current form from variety name or current item
-    const currentForm = (current.forme || '').toLowerCase();
-    const varietyNameLower = variety.name.toLowerCase();
-    const isTige = currentForm.includes('tige') || varietyNameLower.includes('tige');
-    const isBoule = currentForm.includes('boule') || varietyNameLower.includes('boule');
-    const isPalissade = currentForm.includes('palissade') || currentForm.includes('espalier') || varietyNameLower.includes('palissade');
-    const currentFormType = isTige ? 'tige' : isBoule ? 'boule' : isPalissade ? 'palissade' : '';
-
-    const supplierBest = {}; // supplier -> closest match
-    for (const v of r.varieties) {
-      if (v === variety) continue;
-      for (const sg of v.sizes) {
-        for (const s of sg.suppliers) {
-          if (s.price <= 0) continue;
-          const exists = allSuppliersGlobal.find(x => x.supplier === s.supplier);
-          if (exists) continue;
-
-          // Check if form matches
-          const itemForm = (s.forme || '').toLowerCase();
-          const varNameLower = v.name.toLowerCase();
-          let formMatch = !currentFormType; // if no specific form, match all
-          if (currentFormType === 'tige') formMatch = itemForm.includes('tige') || varNameLower.includes('tige');
-          if (currentFormType === 'boule') formMatch = itemForm.includes('boule') || varNameLower.includes('boule');
-          if (currentFormType === 'palissade') formMatch = itemForm.includes('palissade') || itemForm.includes('espalier') || varNameLower.includes('palissade');
-
-          if (!formMatch && currentFormType) continue;
-
-          const dist = currentPotSize > 0 && sg.potSizeNum > 0 ? Math.abs(sg.potSizeNum - currentPotSize) : 999;
-          if (!supplierBest[s.supplier] || dist < supplierBest[s.supplier].dist) {
-            const rawPS = s.potSize || (sg.potSizeNum > 0 ? String(sg.potSizeNum) : '');
-            const psLabel = rawPS ? (rawPS.toUpperCase().endsWith('L') ? rawPS : rawPS + 'L') : '';
-            supplierBest[s.supplier] = { ...s, note: psLabel ? ` (${psLabel})` : '', dist };
-          }
-        }
-      }
-    }
-    for (const [supName, bestMatch] of Object.entries(supplierBest)) {
-      allSuppliersGlobal.push(bestMatch);
-    }
-    // ALWAYS put PIDF first if present
-    const pidfIdx = allSuppliersGlobal.findIndex(s => isPIDFSupplier(s.supplier));
-    if (pidfIdx > 0) {
-      const pidfEntry = allSuppliersGlobal.splice(pidfIdx, 1)[0];
-      allSuppliersGlobal.unshift(pidfEntry);
-    }
+    // --- Supplier dropdown: use the pre-built allSuppliersForRow ---
+    const allSuppliersGlobal = allSuppliersForRow;
 
     // ALWAYS show as dropdown
     let supplierHtml = `<select class="supplier-select" onchange="switchSupplierGlobal(${i}, this.value)">`;
     allSuppliersGlobal.forEach((s, si) => {
-      supplierHtml += `<option value="${si}" ${si === 0 ? 'selected' : ''}>${s.supplier}${s.note}</option>`;
+      supplierHtml += `<option value="${si}" ${si === selSup ? 'selected' : ''}>${s.supplier}${s.note}</option>`;
     });
     supplierHtml += '</select>';
 
