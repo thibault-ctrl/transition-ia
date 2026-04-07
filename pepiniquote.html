@@ -2923,31 +2923,18 @@ async function refreshFleurPro(event) {
 }
 
 // ============ FEEDBACK ============
-async function sendFeedback() {
+function sendFeedback() {
   const text = document.getElementById('feedbackText').value.trim();
   const status = document.getElementById('feedbackStatus');
   if (!text) { status.textContent = 'Écrivez votre idée avant d\'envoyer.'; return; }
 
-  status.textContent = 'Envoi en cours...';
-  try {
-    const resp = await fetch('/api/feedback', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text })
-    });
-    const data = await resp.json();
-    if (data.ok) {
-      status.textContent = '✅ Merci ! Votre idée a été envoyée.';
-      status.style.color = 'var(--success)';
-      document.getElementById('feedbackText').value = '';
-    } else {
-      status.textContent = '❌ Erreur : ' + (data.error || 'échec envoi');
-      status.style.color = 'var(--danger)';
-    }
-  } catch (e) {
-    status.textContent = '❌ Erreur : ' + e.message;
-    status.style.color = 'var(--danger)';
-  }
+  const subject = encodeURIComponent('💡 Idée d\'amélioration PepiniQuote');
+  const body = encodeURIComponent(text + '\n\n---\nEnvoyé depuis PepiniQuote');
+  window.open('mailto:thibault@planteidf.fr?subject=' + subject + '&body=' + body);
+
+  status.textContent = '✅ Votre client mail s\'est ouvert avec le message.';
+  status.style.color = 'var(--success)';
+  document.getElementById('feedbackText').value = '';
 }
 
 function switchSupplierGlobal(rowIndex, supIndex) {
