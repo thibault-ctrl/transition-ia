@@ -2058,7 +2058,7 @@ async function generateQuote() {
       'fougere': ['polystichum', 'dryopteris', 'athyrium', 'asplenium'],
       'fougère': ['polystichum', 'dryopteris', 'athyrium', 'asplenium'],
       'clematite': ['clematis'], 'clématite': ['clematis'],
-      'sauge': ['salvia', 'perovskia'], 'marguerite': ['leucanthemum', 'argyranthemum'],
+      'sauge': ['salvia'], 'sauge de russie': ['perovskia'], 'marguerite': ['leucanthemum', 'argyranthemum'],
       'oeillet': ['dianthus'], 'iris': ['iris'], 'pivoine': ['paeonia'],
       'campanule': ['campanula'], 'digitale': ['digitalis'],
       'lupin': ['lupinus'], 'achillée': ['achillea'], 'achillee': ['achillea'],
@@ -2107,6 +2107,14 @@ async function generateQuote() {
         if (reqText.includes(color) || variants.some(v => reqText.includes(v))) { reqColors = variants; break; }
       }
 
+      // Form detection: grimpant/touffe/tige from request
+      let reqForme = '';
+      if (reqText.includes('grimpant')) reqForme = 'grimpant';
+      else if (reqText.includes(' tige')) reqForme = 'tige';
+      else if (reqText.includes('touffe')) reqForme = 'touffe';
+      else if (reqText.includes('boule')) reqForme = 'boule';
+      else if (reqText.includes('palissade') || reqText.includes('espalier')) reqForme = 'palissade';
+
       const matches = [];
       for (const item of pidfSup.data) {
         const nameNorm = (item.name || '').toLowerCase();
@@ -2146,6 +2154,20 @@ async function generateQuote() {
         if (genus && wordMatch(nameNorm, genus)) score += 5;
         if (species && nameNorm.includes(species)) score += 3;
         if (reqColors.length > 0 && reqColors.some(c => (nameNorm + ' ' + heightNorm).includes(c))) score += 5;
+
+        // Form matching: boost correct form, penalize wrong form
+        if (reqForme) {
+          const itemForme = (item.forme || '').toLowerCase();
+          const nameHasForme = nameNorm.includes(reqForme) || itemForme.includes(reqForme);
+          if (nameHasForme) score += 5;
+          else {
+            // Check for conflicting form (asking grimpant but got touffe)
+            const otherFormes = ['grimpant', 'tige', 'touffe', 'boule', 'palissade'];
+            const hasOtherForme = otherFormes.some(f => f !== reqForme && (nameNorm.includes(f) || itemForme.includes(f)));
+            if (hasOtherForme) score -= 3;
+          }
+        }
+
         if (score < 2) continue;
 
         const exists = matches.find(x => x.name === item.name && x.potSize === item.potSize && x.height === item.height);
@@ -2153,7 +2175,35 @@ async function generateQuote() {
           matches.push({ ...item, supplier: pidfSup.name, score: score / termsArr.length });
         }
       }
-      return { matches, hasPlant: matches.length > 0 };
+      // Determine pidfHasPlant: check if ANY match has the SPECIFIC cultivar
+      // Not just "PIDF has rosiers" but "PIDF has THIS rosier"
+      let hasExactCultivar = false;
+      let hasGenusOnly = false;
+      if (matches.length > 0) {
+        // Extract cultivar-specific words from request (not genus, not generic)
+        const botWords = new Set((botanicalName || '').toLowerCase().split(/\s+/).filter(w => w.length > 2));
+        const reqSpecificWords = reqText.split(/\s+/)
+          .map(w => w.toLowerCase())
+          .filter(w => w.length > 3 && !genericDescriptors.has(w) && !botWords.has(w)
+            && !/^\d/.test(w) && !['avec', 'dans', 'pour', 'les', 'des', 'une'].includes(w));
+
+        if (reqSpecificWords.length === 0) {
+          // No cultivar specified (just "Perovskia" or "Stipa") → genus match is enough
+          hasExactCultivar = true;
+        } else {
+          // Check if best match contains at least one cultivar word
+          const bestMatch = matches.sort((a, b) => b.score - a.score)[0];
+          const bestName = (bestMatch.name || '').toLowerCase();
+          hasExactCultivar = reqSpecificWords.some(w => bestName.includes(w));
+          hasGenusOnly = !hasExactCultivar;
+        }
+      }
+      return {
+        matches,
+        hasPlant: matches.length > 0,
+        hasExactCultivar,  // true = PIDF has the specific cultivar
+        hasGenusOnly       // true = PIDF has the genus but not the specific cultivar
+      };
     }
 
     // === PHASE 2: WHOLESALE SEARCH (broader matching with translations) ===
@@ -2251,7 +2301,9 @@ async function generateQuote() {
         requested: plant.requested,
         qty: plant.qty || 1,
         matches: allMatches,
-        pidfHasPlant: pidfResult.hasPlant, // DEFINITIVE flag
+        pidfHasPlant: pidfResult.hasPlant,
+        pidfHasExactCultivar: pidfResult.hasExactCultivar,
+        pidfHasGenusOnly: pidfResult.hasGenusOnly,
         selected: 0,
         aiPowered: true,
         _requestedPotSize: plant.potSize || 0,
@@ -2694,14 +2746,23 @@ function renderResults(results) {
 
     if (r.varieties.length === 0) {
       html += `<tr>
-        <td><strong>${escapeHtml(r.requested)}</strong></td>
-        <td colspan="7" class="not-found">⚠ Aucun résultat trouvé</td>
+        <td><strong>${escapeHtml(r.requested)}</strong><div class="match-details">× ${r.qty}</div></td>
+        <td colspan="7" class="not-found"><span style="color:#c0392b;font-weight:600">❌ Plante non trouvée dans les catalogues</span></td>
       </tr>`;
       continue;
     }
 
     const selVar = Math.min(r.selectedVariety, r.varieties.length - 1);
     const variety = r.varieties[selVar];
+
+    // Threshold: if best variety score is very low, warn user
+    if (variety.score < 0.15 && r.varieties.length <= 2) {
+      html += `<tr>
+        <td><strong>${escapeHtml(r.requested)}</strong><div class="match-details">× ${r.qty}</div></td>
+        <td colspan="7" class="not-found"><span style="color:#e67e22;font-weight:600">🔴 Match très faible — vérifier manuellement</span></td>
+      </tr>`;
+      continue;
+    }
 
     // --- Step 1: Get ALL unique suppliers across ALL varieties ---
     const supplierNames = [];
@@ -2827,7 +2888,11 @@ function renderResults(results) {
     const lineTotal = sellPrice * r.qty;
     totalGeneral += lineTotal;
 
-    const scoreClass = variety.score >= 0.85 ? 'score-high' : variety.score >= 0.65 ? 'score-medium' : 'score-low';
+    // Confidence indicator: 🟢 exact match / 🟡 partial / 🔴 weak
+    const scoreVal = variety.score;
+    const scoreIcon = scoreVal >= 0.6 ? '🟢' : scoreVal >= 0.3 ? '🟡' : '🔴';
+    const scoreLabel = scoreVal >= 0.6 ? 'Match exact' : scoreVal >= 0.3 ? 'Match partiel' : 'Match faible';
+    const scoreClass = scoreVal >= 0.6 ? 'score-high' : scoreVal >= 0.3 ? 'score-medium' : 'score-low';
 
     // --- Variety dropdown ---
     let varietyHtml = `<select class="variety-select" onchange="switchVariety(${i}, this.value)">`;
@@ -2856,17 +2921,22 @@ function renderResults(results) {
     });
     sizeHtml += '</select>';
 
-    // Use DEFINITIVE pidfHasPlant flag from Phase 1 search (not supplier scan)
-    const noPidfBadge = (r.pidfHasPlant === false) ? '<div style="color:#c0392b;font-size:11px;font-weight:600;margin-top:4px">⚠ Non dispo sur PIDF</div>' : '';
+    // PIDF badge: 3 states
+    let pidfBadge = '';
+    if (r.pidfHasPlant === false) {
+      pidfBadge = '<div style="color:#c0392b;font-size:11px;font-weight:600;margin-top:4px">⚠ Non dispo sur PIDF</div>';
+    } else if (r.pidfHasGenusOnly) {
+      pidfBadge = '<div style="color:#e67e22;font-size:11px;font-weight:600;margin-top:4px">⚠ Cultivar non trouvé sur PIDF</div>';
+    }
 
     html += `<tr data-row="${i}">
       <td>
         <div class="match-name">${escapeHtml(r.requested)}</div>
         <div class="match-details">× ${r.qty}</div>
-        ${noPidfBadge}
+        ${pidfBadge}
       </td>
       <td>
-        <span class="match-score ${scoreClass}">${Math.round(variety.score * 100)}%</span>
+        <span class="match-score ${scoreClass}" title="${scoreLabel}">${scoreIcon}</span>
         ${r.aiPowered ? '<span class="ai-badge">IA</span>' : ''}
         <div style="margin-top:6px">${varietyHtml}</div>
       </td>
