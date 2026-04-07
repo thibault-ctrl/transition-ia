@@ -2718,10 +2718,17 @@ function renderResults(results) {
           }
         }
       }
-      // Then try potSize
+      // Then try potSize — find CLOSEST match, not exact
       if (!found && r._targetPotSize > 0) {
-        const targetIdx = supplierSizes.findIndex(sg => sg.potSizeNum === r._targetPotSize);
-        if (targetIdx >= 0) selSize = targetIdx;
+        let closestDist = 9999, closestIdx = -1;
+        for (let si = 0; si < supplierSizes.length; si++) {
+          const sn = supplierSizes[si].potSizeNum || 0;
+          if (sn > 0) {
+            const dist = Math.abs(sn - r._targetPotSize);
+            if (dist < closestDist) { closestDist = dist; closestIdx = si; }
+          }
+        }
+        if (closestIdx >= 0) selSize = closestIdx;
       }
       delete r._targetPotSize;
       delete r._targetHeight;
