@@ -2115,17 +2115,15 @@ async function generateQuote() {
       else if (reqText.includes('boule')) reqForme = 'boule';
       else if (reqText.includes('palissade') || reqText.includes('espalier')) reqForme = 'palissade';
 
+      const genericDescriptors = new Set(['fougère', 'fougere', 'palmier', 'arbre', 'arbuste',
+        'plante', 'herbe', 'fleur', 'fleurs', 'vivace', 'grimpant', 'grimpante', 'groupées',
+        'groupees', 'nain', 'naine', 'double', 'blanc', 'blanche', 'rouge', 'rose', 'violet',
+        'violette', 'bleu', 'bleue', 'jaune', 'godet', 'touffe']);
+
       const matches = [];
       for (const item of pidfSup.data) {
         const nameNorm = (item.name || '').toLowerCase();
         const heightNorm = (item.height || '').toLowerCase();
-
-        // GENUS match for PIDF: botanical genus OR specific words from searchTerms
-        // BUT NOT generic descriptors that span multiple genera
-        const genericDescriptors = new Set(['fougère', 'fougere', 'palmier', 'arbre', 'arbuste',
-          'plante', 'herbe', 'fleur', 'fleurs', 'vivace', 'grimpant', 'grimpante', 'groupées',
-          'groupees', 'nain', 'naine', 'double', 'blanc', 'blanche', 'rouge', 'rose', 'violet',
-          'violette', 'bleu', 'bleue', 'jaune', 'godet', 'touffe']);
         let genusOk = false;
         // 1) Botanical genus as whole word
         if (genus.length > 3 && wordMatch(nameNorm, genus)) genusOk = true;
@@ -2180,11 +2178,23 @@ async function generateQuote() {
       let hasExactCultivar = false;
       let hasGenusOnly = false;
       if (matches.length > 0) {
-        // Extract cultivar-specific words from request (not genus, not generic)
-        const botWords = new Set((botanicalName || '').toLowerCase().split(/\s+/).filter(w => w.length > 2));
+        // Extract cultivar-specific words from request (not genus, not generic, not FR plant names)
+        // Genus + true species name only. Cultivar names stay as specific words.
+        // "Rosa 'Iceberg'" → genus "rosa" only (Iceberg is a cultivar, not species)
+        // "Helleborus orientalis" → {"helleborus","orientalis"} (both are Latin taxonomy)
+        const rawBotName = (botanicalName || '').replace(/['"]/g, '');
+        const botParts = rawBotName.split(/\s+/);
+        const botWords = new Set();
+        if (botParts[0]?.length > 2) botWords.add(botParts[0].toLowerCase());
+        // 2nd word only if it's a Latin species name (starts lowercase in original)
+        if (botParts[1]?.length > 2 && botParts[1][0] === botParts[1][0].toLowerCase()) {
+          botWords.add(botParts[1].toLowerCase());
+        }
+        const frGenusNames = new Set(Object.keys(genusTranslations)); // "rosier", "palmier", "clématite"...
         const reqSpecificWords = reqText.split(/\s+/)
           .map(w => w.toLowerCase())
           .filter(w => w.length > 3 && !genericDescriptors.has(w) && !botWords.has(w)
+            && !frGenusNames.has(w)
             && !/^\d/.test(w) && !['avec', 'dans', 'pour', 'les', 'des', 'une'].includes(w));
 
         if (reqSpecificWords.length === 0) {
