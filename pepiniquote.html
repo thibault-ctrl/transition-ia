@@ -2112,17 +2112,25 @@ async function generateQuote() {
         const nameNorm = (item.name || '').toLowerCase();
         const heightNorm = (item.height || '').toLowerCase();
 
-        // GENUS match for PIDF: botanical genus OR any individual word from searchTerms
-        // "rosa" → matches "Rosa" products, "rosier" → matches "Rosier grimpant"
+        // GENUS match for PIDF: botanical genus OR specific words from searchTerms
+        // BUT NOT generic descriptors that span multiple genera
+        const genericDescriptors = new Set(['fougère', 'fougere', 'palmier', 'arbre', 'arbuste',
+          'plante', 'herbe', 'fleur', 'fleurs', 'vivace', 'grimpant', 'grimpante', 'groupées',
+          'groupees', 'nain', 'naine', 'double', 'blanc', 'blanche', 'rouge', 'rose', 'violet',
+          'violette', 'bleu', 'bleue', 'jaune', 'godet', 'touffe']);
         let genusOk = false;
         // 1) Botanical genus as whole word
         if (genus.length > 3 && wordMatch(nameNorm, genus)) genusOk = true;
-        // 2) Any individual word (>3 chars) from searchTerms in product name
+        // 2) Species name
+        if (!genusOk && species.length > 3 && nameNorm.includes(species)) genusOk = true;
+        // 3) Specific words from searchTerms (not generic descriptors)
         if (!genusOk) {
           for (const st of searchTerms) {
             const words = st.split(/\s+/);
             for (const w of words) {
-              if (w.length > 3 && nameNorm.includes(w)) { genusOk = true; break; }
+              if (w.length > 3 && !genericDescriptors.has(w) && nameNorm.includes(w)) {
+                genusOk = true; break;
+              }
             }
             if (genusOk) break;
           }
