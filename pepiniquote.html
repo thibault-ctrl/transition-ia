@@ -2597,9 +2597,8 @@ function renderResults(results) {
         }
       }
     }
-    // Check if PIDF has this plant for the SELECTED variety (not all varieties)
-    const selectedVarietyItems = variety.sizes?.flatMap(sg => sg.suppliers) || [];
-    const hasPIDF = selectedVarietyItems.some(s => isPIDFSupplier(s.supplier));
+    // Check if PIDF has this plant across ALL varieties
+    const hasPIDF = supplierNames.some(n => isPIDFSupplier(n));
     // Put PIDF first if present
     const pidfIdx = supplierNames.findIndex(n => isPIDFSupplier(n));
     if (pidfIdx > 0) supplierNames.unshift(supplierNames.splice(pidfIdx, 1)[0]);
