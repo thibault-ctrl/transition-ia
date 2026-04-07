@@ -2291,9 +2291,11 @@ async function generateQuote() {
         } else if (reqHeight) {
           // Match by height — extract numeric value and find closest
           const reqNorm = reqHeight.replace(/\s/g, '').toLowerCase();
-          // Extract the main number from the requested height (e.g. "100/125cm" → 100, "30cm" → 30)
-          const reqNumMatch = reqHeight.match(/(\d+)/);
-          const reqNum = reqNumMatch ? parseInt(reqNumMatch[1]) : 0;
+          // Extract height: use MIDPOINT for ranges ("200/250" → 225, "100/125cm" → 112)
+          const reqAllNums = reqHeight.match(/(\d+)/g);
+          const reqNum = reqAllNums ? (reqAllNums.length >= 2
+            ? Math.round((parseInt(reqAllNums[0]) + parseInt(reqAllNums[1])) / 2)
+            : parseInt(reqAllNums[0])) : 0;
 
           let bestHeightDist = 9999;
           const heightStartVar = bestVar;
@@ -2307,8 +2309,11 @@ async function generateQuote() {
                 const h = (sup.height || '').replace(/\s/g, '').toLowerCase();
                 if (!h) continue;
                 const exactMatch = h.includes(reqNorm) || reqNorm.includes(h.replace('cm','').replace(/^0+/,''));
-                const hNumMatch = h.match(/(\d+)/);
-                const hNum = hNumMatch ? parseInt(hNumMatch[1]) : 0;
+                // Use midpoint for product height ranges too ("160/180" → 170)
+                const hAllNums = h.match(/(\d+)/g);
+                const hNum = hAllNums ? (hAllNums.length >= 2
+                  ? Math.round((parseInt(hAllNums[0]) + parseInt(hAllNums[1])) / 2)
+                  : parseInt(hAllNums[0])) : 0;
                 const numDist = (reqNum > 0 && hNum > 0) ? Math.abs(hNum - reqNum) : 9999;
                 const dist = exactMatch ? 0 : numDist;
                 if (dist < found.dist) { found = { dist, si }; }
@@ -2710,11 +2715,19 @@ function renderResults(results) {
         }
         // If no exact match, find closest by number
         if (!found) {
-          const reqNum = parseInt(th.match(/(\d+)/)?.[1] || '0');
+          // Use midpoint for ranges: "200/250" → 225
+          const thNums = th.match(/(\d+)/g);
+          const reqNum = thNums ? (thNums.length >= 2
+            ? Math.round((parseInt(thNums[0]) + parseInt(thNums[1])) / 2)
+            : parseInt(thNums[0])) : 0;
           if (reqNum > 0) {
             let closestDist = 9999;
             for (let si = 0; si < supplierSizes.length; si++) {
-              const hNum = parseInt((supplierSizes[si].item.height || '').match(/(\d+)/)?.[1] || '0');
+              const hStr = (supplierSizes[si].item.height || '');
+              const hNums = hStr.match(/(\d+)/g);
+              const hNum = hNums ? (hNums.length >= 2
+                ? Math.round((parseInt(hNums[0]) + parseInt(hNums[1])) / 2)
+                : parseInt(hNums[0])) : 0;
               if (hNum > 0 && Math.abs(hNum - reqNum) < closestDist) {
                 closestDist = Math.abs(hNum - reqNum);
                 selSize = si;
