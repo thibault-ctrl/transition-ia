@@ -2314,7 +2314,11 @@ async function generateQuote() {
 
         if (bestVar >= 0 && bestDist <= 2) {
           results[i].selectedVariety = bestVar;
-          results[i]._targetPotSize = r.varieties[bestVar].sizes[bestSize].potSizeNum;
+          const bestSg = r.varieties[bestVar].sizes[bestSize];
+          results[i]._targetPotSize = bestSg.potSizeNum;
+          // Also store the target height for the render to match
+          const bestSup = bestSg.suppliers.find(s => isPIDFSupplier(s.supplier)) || bestSg.suppliers[0];
+          results[i]._targetHeight = bestSup ? (bestSup.height || '').replace(/\s/g, '').toLowerCase() : '';
           results[i].selectedSupplier = 0;
           changed = true;
         }
@@ -2656,13 +2660,44 @@ function renderResults(results) {
     // --- Step 4: Select size and get current product ---
     // If _targetPotSize is set, find the matching index in supplierSizes
     let selSize = Math.min(r.selectedSize ?? 0, supplierSizes.length - 1);
-    if (r._targetPotSize && r._targetPotSize > 0) {
-      const targetIdx = supplierSizes.findIndex(sg => sg.potSizeNum === r._targetPotSize);
-      if (targetIdx >= 0) selSize = targetIdx;
+    if (r._targetPotSize || r._targetHeight) {
+      let found = false;
+      // First try to match by height (more precise)
+      if (r._targetHeight) {
+        const th = r._targetHeight;
+        for (let si = 0; si < supplierSizes.length; si++) {
+          const h = (supplierSizes[si].item.height || '').replace(/\s/g, '').toLowerCase();
+          if (h && (h.includes(th) || th.includes(h.replace('cm','')))) {
+            selSize = si;
+            found = true;
+            break;
+          }
+        }
+        // If no exact match, find closest by number
+        if (!found) {
+          const reqNum = parseInt(th.match(/(\d+)/)?.[1] || '0');
+          if (reqNum > 0) {
+            let closestDist = 9999;
+            for (let si = 0; si < supplierSizes.length; si++) {
+              const hNum = parseInt((supplierSizes[si].item.height || '').match(/(\d+)/)?.[1] || '0');
+              if (hNum > 0 && Math.abs(hNum - reqNum) < closestDist) {
+                closestDist = Math.abs(hNum - reqNum);
+                selSize = si;
+              }
+            }
+          }
+        }
+      }
+      // Then try potSize
+      if (!found && r._targetPotSize > 0) {
+        const targetIdx = supplierSizes.findIndex(sg => sg.potSizeNum === r._targetPotSize);
+        if (targetIdx >= 0) selSize = targetIdx;
+      }
       delete r._targetPotSize;
-      // Also delete from quoteResults to prevent re-triggering
+      delete r._targetHeight;
       if (window._quoteResults && window._quoteResults[i]) {
         delete window._quoteResults[i]._targetPotSize;
+        delete window._quoteResults[i]._targetHeight;
       }
     }
     const current = supplierSizes[selSize] ? supplierSizes[selSize].item : (variety.sizes[0]?.suppliers[0] || {});
