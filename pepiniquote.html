@@ -2012,140 +2012,186 @@ async function generateQuote() {
     showLoading('🔍 Recherche dans les catalogues...');
     window._liveSearchResults = [];
 
-    // LOCAL MATCHING: for each plant, search all suppliers by keywords
-    const results = plants.map((plant, itemIdx) => {
-      const clientRequestedPotSize = plant.potSize || 0;
-      const clientRequestedHeight = plant.height || '';
-      const reqText = (plant.requested || '').toLowerCase();
+    // === SHARED UTILITIES ===
+    const genusTranslations = {
+      'rosier': ['rosai'], 'olivier': ['olea'], 'laurier': ['laurus'],
+      'citronnier': ['citrus'], 'cypres': ['cupressus', 'cupressocyparis'], 'cyprès': ['cupressus'],
+      'glycine': ['wisteria'], 'lavande': ['lavandula'], 'erable': ['acer'], 'érable': ['acer'],
+      'hortensia': ['hydrangea'], 'jasmin': ['trachelospermum', 'jasminum'],
+      'cerisier': ['prunus'], 'pommier': ['malus'], 'figuier': ['ficus'],
+      'troene': ['ligustrum'], 'troène': ['ligustrum'], 'lilas': ['syringa', 'lagerstroemia'],
+      'houx': ['ilex'], 'charme': ['carpinus'], 'bouleau': ['betula'],
+      'noisetier': ['corylus'], 'grenadier': ['punica'], 'bananier': ['musa', 'ensete'],
+      'verveine': ['verbena'], 'geranium': ['geranium'], 'géranium': ['geranium'],
+      'anemone': ['anemone'], 'anémone': ['anemone'], 'fougere': ['polystichum', 'dryopteris'],
+      'fougère': ['polystichum', 'dryopteris'], 'clematite': ['clematis'], 'clématite': ['clematis']
+    };
+    function wordMatch(text, word) {
+      const re = new RegExp('(^|[\\s(\'"/,])' + word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '($|[\\s)\'"/,])', 'i');
+      return re.test(text);
+    }
+    const colorMap = { 'blanc': ['blanc', 'blanche', 'alba', 'white', 'albus'],
+      'bleu': ['bleu', 'bleue', 'blue', 'caerulea'], 'rose': ['rose', 'rosea', 'pink'],
+      'rouge': ['rouge', 'red', 'rubra'], 'violet': ['violet', 'violette', 'purple'],
+      'jaune': ['jaune', 'yellow', 'aurea'] };
+
+    // === PHASE 1: PIDF-ONLY SEARCH (strict botanical matching) ===
+    function searchPIDFCatalog(searchTerms, botanicalName, reqText) {
+      const pidfSup = suppliers.find(s => s && isPIDFSupplier(s.name));
+      if (!pidfSup || !pidfSup.data) return { matches: [], hasPlant: false };
+
+      // Extract botanical genus (1st word) and species (2nd word)
+      const botParts = (botanicalName || '').toLowerCase().replace(/['"]/g, '').split(/\s+/);
+      const genus = botParts[0] || '';
+      const species = botParts[1] || '';
+
+      // Build search terms: ONLY botanical + specific cultivar terms from Claude
+      // NO genusTranslations expansion (no "fougère"→"polystichum" here)
+      const terms = new Set(searchTerms);
+      reqText.split(/\s+/).filter(w => w.length > 3).forEach(w => terms.add(w));
+      const termsArr = [...terms].filter(t => t.length > 2);
+
+      // Color detection
+      let reqColors = [];
+      for (const [color, variants] of Object.entries(colorMap)) {
+        if (reqText.includes(color) || variants.some(v => reqText.includes(v))) { reqColors = variants; break; }
+      }
+
       const matches = [];
+      for (const item of pidfSup.data) {
+        const nameNorm = (item.name || '').toLowerCase();
+        const heightNorm = (item.height || '').toLowerCase();
 
-      // Search terms from Claude identification
-      const searchTerms = (plant.searchTerms || []).map(t => t.toLowerCase());
-      // Add translations
-      const genusTranslations = {
-        'rosier': ['rosai'], 'olivier': ['olea'], 'laurier': ['laurus'],
-        'citronnier': ['citrus'], 'cypres': ['cupressus', 'cupressocyparis'], 'cyprès': ['cupressus'],
-        'glycine': ['wisteria'], 'lavande': ['lavandula'], 'erable': ['acer'], 'érable': ['acer'],
-        'hortensia': ['hydrangea'], 'jasmin': ['trachelospermum', 'jasminum'],
-        'cerisier': ['prunus'], 'pommier': ['malus'], 'figuier': ['ficus'],
-        'troene': ['ligustrum'], 'troène': ['ligustrum'], 'lilas': ['syringa', 'lagerstroemia'],
-        'houx': ['ilex'], 'charme': ['carpinus'], 'bouleau': ['betula'],
-        'noisetier': ['corylus'], 'grenadier': ['punica'], 'bananier': ['musa', 'ensete'],
-        'verveine': ['verbena'], 'geranium': ['geranium'], 'géranium': ['geranium'],
-        'anemone': ['anemone'], 'anémone': ['anemone'], 'fougere': ['polystichum', 'dryopteris'],
-        'fougère': ['polystichum', 'dryopteris'], 'clematite': ['clematis'], 'clématite': ['clematis']
-      };
+        // STRICT genus match: botanical genus must be in product name as whole word
+        // OR any searchTerm (from Claude) with >4 chars must be in product name
+        let genusOk = false;
+        if (genus.length > 3 && wordMatch(nameNorm, genus)) genusOk = true;
+        if (!genusOk) {
+          for (const st of searchTerms) {
+            if (st.length > 4 && nameNorm.includes(st)) { genusOk = true; break; }
+          }
+        }
+        if (!genusOk) continue;
 
+        // Score
+        let score = 0;
+        for (const t of termsArr) {
+          if (nameNorm.includes(t)) score += 2;
+          else if (heightNorm.includes(t)) score += 1;
+        }
+        if (genus && wordMatch(nameNorm, genus)) score += 5;
+        if (species && nameNorm.includes(species)) score += 3;
+        if (reqColors.length > 0 && reqColors.some(c => (nameNorm + ' ' + heightNorm).includes(c))) score += 5;
+        if (score < 2) continue;
+
+        const exists = matches.find(x => x.name === item.name && x.potSize === item.potSize && x.height === item.height);
+        if (!exists && item.price > 0) {
+          matches.push({ ...item, supplier: pidfSup.name, score: score / termsArr.length });
+        }
+      }
+      return { matches, hasPlant: matches.length > 0 };
+    }
+
+    // === PHASE 2: WHOLESALE SEARCH (broader matching with translations) ===
+    function searchWholesaleCatalogs(searchTerms, botanicalName, reqText) {
+      const wholesaleSuppliers = suppliers.filter(s => s && !isPIDFSupplier(s.name));
+      const resultsBySupplier = {};
+
+      // Build expanded terms (with genusTranslations)
       const allTerms = new Set(searchTerms);
       for (const term of searchTerms) {
-        const words = term.split(/\s+/);
-        for (const w of words) {
+        for (const w of term.split(/\s+/)) {
           if (genusTranslations[w]) genusTranslations[w].forEach(t => allTerms.add(t));
           allTerms.add(w);
         }
       }
-      // Also add words from the original request
       reqText.split(/\s+/).filter(w => w.length > 3).forEach(w => {
         allTerms.add(w);
         if (genusTranslations[w]) genusTranslations[w].forEach(t => allTerms.add(t));
       });
-
       const termsArr = [...allTerms].filter(t => t.length > 2);
 
-      // Color keywords
-      const colorMap = { 'blanc': ['blanc', 'blanche', 'alba', 'white', 'albus'],
-        'bleu': ['bleu', 'bleue', 'blue', 'caerulea'], 'rose': ['rose', 'rosea', 'pink'],
-        'rouge': ['rouge', 'red', 'rubra'], 'violet': ['violet', 'violette', 'purple'],
-        'jaune': ['jaune', 'yellow', 'aurea'] };
-      let reqColors = [];
-      for (const [color, variants] of Object.entries(colorMap)) {
-        if (reqText.includes(color) || variants.some(v => reqText.includes(v))) {
-          reqColors = variants;
-          break;
+      // Genus words (for filter + bonus)
+      const genusWords = new Set();
+      const genusWordsStrict = new Set();
+      for (const st of searchTerms) {
+        const cleaned = st.replace(/['"]/g, '');
+        const firstWord = cleaned.split(/\s+/).filter(w => w.length > 3)[0];
+        if (firstWord) {
+          genusWords.add(firstWord);
+          if (genusTranslations[firstWord]) {
+            genusTranslations[firstWord].forEach(t => { genusWords.add(t); genusWordsStrict.add(t); });
+          } else {
+            genusWordsStrict.add(firstWord);
+          }
         }
       }
 
-      // Search ALL suppliers
-      const allSuppliers = suppliers.filter(Boolean);
-      for (const sup of allSuppliers) {
-        for (const plant_item of sup.data) {
-          const nameNorm = (plant_item.name || '').toLowerCase();
-          const heightNorm = (plant_item.height || '').toLowerCase();
-          const fullText = nameNorm + ' ' + heightNorm;
+      // Color detection
+      let reqColors = [];
+      for (const [color, variants] of Object.entries(colorMap)) {
+        if (reqText.includes(color) || variants.some(v => reqText.includes(v))) { reqColors = variants; break; }
+      }
 
-          // GENUS constraint: the first word (genus) of ANY searchTerm MUST be in product name
-          // searchTerms = ["hellebore", "helleborus", "helleborus orientalis"]
-          // genusWords = ["hellebore", "helleborus"] → product "HELLEBORUS..." matches via "helleborus"
-          // This prevents cross-genus matches (Emerald→Euonymus) while allowing FR/Latin variants
-          const genusWords = new Set();      // For filter: all genus words (FR + Latin)
-          const genusWordsStrict = new Set(); // For bonus: only botanical/specific words
-          for (const st of searchTerms) {
-            const cleaned = st.replace(/['"]/g, '');
-            const firstWord = cleaned.split(/\s+/).filter(w => w.length > 3)[0];
-            if (firstWord) {
-              genusWords.add(firstWord);
-              if (genusTranslations[firstWord]) {
-                // FR generic name → add translations for both filter + bonus
-                genusTranslations[firstWord].forEach(t => { genusWords.add(t); genusWordsStrict.add(t); });
-              } else {
-                // Botanical name → bonus applies directly
-                genusWordsStrict.add(firstWord);
-              }
-            }
-          }
-          // Use word boundary matching: "rosa" must match as whole word, not "rosea"
-          function wordMatch(text, word) {
-            const re = new RegExp('(^|[\\s(\'"/,])' + word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '($|[\\s)\'"/,])', 'i');
-            return re.test(text);
-          }
+      for (const sup of wholesaleSuppliers) {
+        const matches = [];
+        for (const item of sup.data) {
+          const nameNorm = (item.name || '').toLowerCase();
+          const heightNorm = (item.height || '').toLowerCase();
+
+          // Genus constraint
           if (genusWords.size > 0 && ![...genusWords].some(g => wordMatch(nameNorm, g))) continue;
 
-          // Score: count how many search terms match
+          // Score
           let score = 0;
-          for (const term of termsArr) {
-            if (nameNorm.includes(term)) score += 2;
-            else if (heightNorm.includes(term)) score += 1;
+          for (const t of termsArr) {
+            if (nameNorm.includes(t)) score += 2;
+            else if (heightNorm.includes(t)) score += 1;
           }
-
-          // Genus bonus: big bonus only for BOTANICAL genus matches (strict)
-          // "fougère" gives no bonus (generic), but "polystichum" gives +5 (specific)
           for (const g of genusWordsStrict) {
             if (wordMatch(nameNorm, g)) score += 5;
           }
-
-          // Need at least genus match + 1 more term
           if (score < 2) continue;
+          if (reqColors.length > 0 && reqColors.some(c => (nameNorm + ' ' + heightNorm).includes(c))) score += 5;
 
-          // Color filter
-          if (reqColors.length > 0) {
-            const hasColor = reqColors.some(c => fullText.includes(c));
-            if (hasColor) score += 5;
-            // Don't filter out — just boost
-          }
-
-          const exists = matches.find(x => x.name === plant_item.name && x.supplier === sup.name && x.potSize === plant_item.potSize && x.height === plant_item.height);
-          if (!exists && plant_item.price > 0) {
-            matches.push({
-              ...plant_item,
-              supplier: sup.name,
-              score: score / termsArr.length
-            });
+          const exists = matches.find(x => x.name === item.name && x.potSize === item.potSize && x.height === item.height);
+          if (!exists && item.price > 0) {
+            matches.push({ ...item, supplier: sup.name, score: score / termsArr.length });
           }
         }
+        if (matches.length > 0) resultsBySupplier[sup.name] = matches;
+      }
+      return resultsBySupplier;
+    }
+
+    // === MAIN LOOP: 2-phase search ===
+    const results = plants.map((plant, itemIdx) => {
+      const searchTerms = (plant.searchTerms || []).map(t => t.toLowerCase());
+      const reqText = (plant.requested || '').toLowerCase();
+
+      // Phase 1: PIDF strict search
+      const pidfResult = searchPIDFCatalog(searchTerms, plant.botanicalName, reqText);
+
+      // Phase 2: Wholesale broad search
+      const wholesaleResult = searchWholesaleCatalogs(searchTerms, plant.botanicalName, reqText);
+
+      // Merge all matches (for backward compat with structureResults)
+      const allMatches = [...pidfResult.matches];
+      for (const [supName, supMatches] of Object.entries(wholesaleResult)) {
+        allMatches.push(...supMatches);
       }
 
-      console.log(`${plant.botanicalName}: ${matches.length} matches from local search`);
-
-      // Return result for this plant
+      console.log(`${plant.botanicalName}: PIDF=${pidfResult.matches.length}, wholesale=${Object.values(wholesaleResult).flat().length} (total=${allMatches.length})`);
 
       return {
         requested: plant.requested,
         qty: plant.qty || 1,
-        matches,
+        matches: allMatches,
+        pidfHasPlant: pidfResult.hasPlant, // DEFINITIVE flag
         selected: 0,
         aiPowered: true,
-        _requestedPotSize: clientRequestedPotSize,
-        _requestedHeight: clientRequestedHeight
+        _requestedPotSize: plant.potSize || 0,
+        _requestedHeight: plant.height || ''
       };
     });
 
@@ -2721,7 +2767,8 @@ function renderResults(results) {
     });
     sizeHtml += '</select>';
 
-    const noPidfBadge = !hasPIDF ? '<div style="color:#c0392b;font-size:11px;font-weight:600;margin-top:4px">⚠ Non dispo sur PIDF</div>' : '';
+    // Use DEFINITIVE pidfHasPlant flag from Phase 1 search (not supplier scan)
+    const noPidfBadge = (r.pidfHasPlant === false) ? '<div style="color:#c0392b;font-size:11px;font-weight:600;margin-top:4px">⚠ Non dispo sur PIDF</div>' : '';
 
     html += `<tr data-row="${i}">
       <td>
