@@ -79,33 +79,33 @@ http.createServer((req, res) => {
     return;
   }
 
-  // FEEDBACK: send email with improvement idea
+  // FEEDBACK: save to local file + show in console
   if (pathname === '/api/feedback' && req.method === 'POST') {
     let body = '';
     req.on('data', chunk => body += chunk);
-    req.on('end', async () => {
+    req.on('end', () => {
       try {
-        const { message } = JSON.parse(body);
+        const { name, message } = JSON.parse(body);
         if (!message) { res.writeHead(400); res.end(JSON.stringify({ error: 'Message vide' })); return; }
 
-        const nodemailer = require('nodemailer');
-        const transporter = nodemailer.createTransport({
-          service: 'gmail',
-          auth: { user: 'planteidf@gmail.com', pass: process.env.GMAIL_APP_PASSWORD || '' }
-        });
+        const entry = {
+          date: new Date().toISOString(),
+          name: name || 'Anonyme',
+          message
+        };
 
-        await transporter.sendMail({
-          from: 'PepiniQuote <planteidf@gmail.com>',
-          to: 'thibault@planteidf.fr',
-          subject: '💡 Idée d\'amélioration PepiniQuote',
-          text: 'Nouvelle suggestion :\n\n' + message + '\n\n---\nEnvoyé depuis PepiniQuote',
-          html: '<h3>💡 Nouvelle idée d\'amélioration</h3><p>' + message.replace(/\n/g, '<br>') + '</p><hr><small>Envoyé depuis PepiniQuote</small>'
-        });
+        // Save to file
+        const feedbackFile = path.join(DIR, 'feedbacks.json');
+        let feedbacks = [];
+        try { feedbacks = JSON.parse(fs.readFileSync(feedbackFile, 'utf8')); } catch(e) {}
+        feedbacks.push(entry);
+        fs.writeFileSync(feedbackFile, JSON.stringify(feedbacks, null, 2));
+
+        console.log('💡 Nouveau feedback de', entry.name, ':', entry.message);
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ ok: true }));
       } catch (err) {
-        console.error('Feedback email error:', err.message);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: err.message }));
       }
