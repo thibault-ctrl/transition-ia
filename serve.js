@@ -80,6 +80,25 @@ http.createServer((req, res) => {
   }
 
   // FEEDBACK: save to local file + show in console
+  // SAVE PIDF: update suppliers_preload.json
+  if (pathname === '/api/save-pidf' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const data = JSON.parse(body);
+        fs.writeFileSync(path.join(DIR, 'suppliers_preload.json'), JSON.stringify(data));
+        console.log('suppliers_preload.json saved');
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+    });
+    return;
+  }
+
   if (pathname === '/api/feedback' && req.method === 'POST') {
     let body = '';
     req.on('data', chunk => body += chunk);

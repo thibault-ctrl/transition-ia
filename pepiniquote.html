@@ -809,7 +809,8 @@ body {
     <h1 class="page-title">Catalogues fournisseurs</h1>
     <p class="page-subtitle">Glissez-déposez vos fichiers Excel ou CSV pour charger les catalogues</p>
     <div style="margin-bottom:16px">
-      <button class="btn btn-secondary" onclick="document.getElementById('fleurFileInput').click()">Actualiser Fleur Pro</button>
+      <button class="btn btn-secondary" onclick="refreshPIDF()" id="refreshPidfBtn">Actualiser PIDF</button>
+      <button class="btn btn-secondary" onclick="document.getElementById('fleurFileInput').click()" style="margin-left:8px">Actualiser Fleur Pro</button>
       <input type="file" id="fleurFileInput" accept=".xls,.xlsx,.csv" style="display:none" onchange="refreshFleurPro(event)">
       <span id="refreshPidfStatus" style="margin-left:12px;font-size:13px;color:#6b6b6b;"></span>
     </div>
@@ -2003,7 +2004,7 @@ async function generateQuote() {
       showLoading(`🔍 Recherche: ${plant.botanicalName}...`);
 
       const [pidfResults, excelResults, fleurResults] = await Promise.all([
-        searchPIDFLive(plant.searchTerms),
+        Promise.resolve([]), // PIDF data is in preloaded suppliers
         Promise.resolve(searchExcelCatalogues(plant.searchTerms, plant.potSize)),
         Promise.resolve([]) // Fleur Pro is now in preloaded suppliers (Excel)
       ]);
@@ -2885,9 +2886,18 @@ async function refreshPIDF() {
       };
     }
 
-    saveToStorage();
     renderSupplierCards();
     updateSupplierCount();
+
+    // Save to server so it persists between sessions
+    status.textContent = `Sauvegarde sur le serveur...`;
+    try {
+      await fetch('/api/save-pidf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(suppliers)
+      });
+    } catch(e) { console.warn('Save to server failed:', e); }
 
     status.textContent = `✅ ${allProducts.length} variantes scrapées avec litrages`;
     showToast(`PIDF actualisé : ${allProducts.length} variantes`, 'success');
@@ -2962,9 +2972,17 @@ async function refreshFleurPro(event) {
       else suppliers.push(fleurSupplier);
     }
 
-    saveToStorage();
     renderSupplierCards();
     updateSupplierCount();
+
+    // Save to server
+    try {
+      await fetch('/api/save-pidf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(suppliers)
+      });
+    } catch(e) {}
 
     status.textContent = '✅ Fleur Pro : ' + parsedData.length + ' produits chargés';
     showToast('Fleur Pro actualisé : ' + parsedData.length + ' produits', 'success');
