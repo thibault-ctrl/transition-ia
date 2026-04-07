@@ -13,6 +13,8 @@ try {
   const envContent = fs.readFileSync(path.join(DIR, '.env'), 'utf8');
   const match = envContent.match(/ANTHROPIC_API_KEY=(.+)/);
   if (match) ANTHROPIC_API_KEY = match[1].trim();
+  const gmailMatch = envContent.match(/GMAIL_APP_PASSWORD=(.+)/);
+  if (gmailMatch) process.env.GMAIL_APP_PASSWORD = gmailMatch[1].trim();
 } catch(e) {}
 
 const MIME = {
@@ -74,6 +76,40 @@ http.createServer((req, res) => {
   if (pathname === '/api/config') {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
     res.end(JSON.stringify({ apiKey: ANTHROPIC_API_KEY }));
+    return;
+  }
+
+  // FEEDBACK: send email with improvement idea
+  if (pathname === '/api/feedback' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      try {
+        const { message } = JSON.parse(body);
+        if (!message) { res.writeHead(400); res.end(JSON.stringify({ error: 'Message vide' })); return; }
+
+        const nodemailer = require('nodemailer');
+        const transporter = nodemailer.createTransport({
+          service: 'gmail',
+          auth: { user: 'planteidf@gmail.com', pass: process.env.GMAIL_APP_PASSWORD || '' }
+        });
+
+        await transporter.sendMail({
+          from: 'PepiniQuote <planteidf@gmail.com>',
+          to: 'thibault@planteidf.fr',
+          subject: '💡 Idée d\'amélioration PepiniQuote',
+          text: 'Nouvelle suggestion :\n\n' + message + '\n\n---\nEnvoyé depuis PepiniQuote',
+          html: '<h3>💡 Nouvelle idée d\'amélioration</h3><p>' + message.replace(/\n/g, '<br>') + '</p><hr><small>Envoyé depuis PepiniQuote</small>'
+        });
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      } catch (err) {
+        console.error('Feedback email error:', err.message);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+    });
     return;
   }
 

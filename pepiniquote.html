@@ -814,6 +814,16 @@ body {
       <span id="refreshPidfStatus" style="margin-left:12px;font-size:13px;color:#6b6b6b;"></span>
     </div>
     <div class="suppliers-grid" id="suppliersGrid"></div>
+
+    <!-- Module Idée d'amélioration -->
+    <div style="margin-top:32px;background:var(--card);border-radius:var(--radius);padding:24px;box-shadow:var(--shadow);">
+      <h3 style="font-size:16px;margin-bottom:12px;">💡 Idée d'amélioration</h3>
+      <textarea id="feedbackText" placeholder="Décrivez votre idée ou suggestion..." style="width:100%;min-height:100px;border:1px solid var(--border);border-radius:8px;padding:12px;font-size:14px;font-family:inherit;resize:vertical;"></textarea>
+      <div style="display:flex;justify-content:flex-end;margin-top:10px;">
+        <button class="btn btn-primary" onclick="sendFeedback()">Envoyer</button>
+      </div>
+      <span id="feedbackStatus" style="font-size:13px;color:var(--text-secondary);"></span>
+    </div>
   </div>
 
   <!-- ========== PAGE: QUOTE ========== -->
@@ -2910,6 +2920,34 @@ async function refreshFleurPro(event) {
   }
 
   event.target.value = '';
+}
+
+// ============ FEEDBACK ============
+async function sendFeedback() {
+  const text = document.getElementById('feedbackText').value.trim();
+  const status = document.getElementById('feedbackStatus');
+  if (!text) { status.textContent = 'Écrivez votre idée avant d\'envoyer.'; return; }
+
+  status.textContent = 'Envoi en cours...';
+  try {
+    const resp = await fetch('/api/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text })
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      status.textContent = '✅ Merci ! Votre idée a été envoyée.';
+      status.style.color = 'var(--success)';
+      document.getElementById('feedbackText').value = '';
+    } else {
+      status.textContent = '❌ Erreur : ' + (data.error || 'échec envoi');
+      status.style.color = 'var(--danger)';
+    }
+  } catch (e) {
+    status.textContent = '❌ Erreur : ' + e.message;
+    status.style.color = 'var(--danger)';
+  }
 }
 
 function switchSupplierGlobal(rowIndex, supIndex) {
