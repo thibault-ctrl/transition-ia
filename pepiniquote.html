@@ -2343,17 +2343,22 @@ async function generateQuote() {
         }
 
         if (bestVar >= 0 && bestDist <= 2) {
+          // Write to BOTH original results AND structured results
+          r.selectedVariety = bestVar;
           results[i].selectedVariety = bestVar;
           const bestSg = r.varieties[bestVar].sizes[bestSize];
+          r._targetPotSize = bestSg.potSizeNum;
           results[i]._targetPotSize = bestSg.potSizeNum;
-          // Also store the target height for the render to match
           const bestSup = bestSg.suppliers.find(s => isPIDFSupplier(s.supplier)) || bestSg.suppliers[0];
-          results[i]._targetHeight = bestSup ? (bestSup.height || '').replace(/\s/g, '').toLowerCase() : '';
+          const targetH = bestSup ? (bestSup.height || '').replace(/\s/g, '').toLowerCase() : '';
+          r._targetHeight = targetH;
+          results[i]._targetHeight = targetH;
+          r.selectedSupplier = 0;
           results[i].selectedSupplier = 0;
           changed = true;
         }
       }
-      if (changed) renderResults(results);
+      if (changed) renderResults(structured);
     } // end if (structured)
     } // end if (!_preSelectDone)
 
