@@ -1649,21 +1649,32 @@ async function aiIdentifyPlants(clientText) {
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
-      max_tokens: 2048,
-      system: `Tu es un expert en horticulture/pépinière. Analyse la demande client et identifie chaque plante demandée.
+      max_tokens: 8192,
+      system: `Tu es un expert en horticulture/pépinière. Analyse la demande client et identifie CHAQUE plante (une ligne = une plante, ne fusionne JAMAIS deux lignes).
+
 Pour chaque plante:
-- Corrige les fautes d'orthographe (fautinia → photinia, etc.)
-- Trouve le nom botanique latin (lavande → Lavandula, érable du japon → Acer palmatum, glycine → Wisteria, etc.)
-- Extrais la quantité, la taille/litrage si précisé, la forme si précisée
+- Corrige les fautes d'orthographe (fautinia → photinia, gora → gaura, etc.)
+- Donne le NOM EXACT tel qu'écrit par le client + le nom botanique latin
+- IMPORTANT: NE CHANGE PAS le genre de la plante. "Phormium" reste "Phormium", "Hellebore" reste "Helleborus", "Verveine" reste "Verbena". Ne confonds JAMAIS avec un autre genre.
+- Extrais la quantité, la taille/litrage, la hauteur, la couleur
 
-RÉPONDS UNIQUEMENT en JSON:
-[{"requested":"texte original","qty":5,"botanicalName":"Photinia","searchTerms":["photinia","photinia fraseri","photinia red robin"],"potSize":10,"height":"","forme":""}]
+RÉPONDS UNIQUEMENT en JSON (un objet par LIGNE de la demande):
+[{"requested":"texte original de la ligne","qty":5,"botanicalName":"Photinia fraseri","searchTerms":["photinia","photinia fraseri","photinia red robin"],"potSize":10,"height":"","forme":"","couleur":""}]
 
-searchTerms = variantes du nom à chercher dans les catalogues (nom commun, nom latin, variétés courantes, noms italiens). Mets au moins 3 termes.
-IMPORTANT noms italiens des catalogues: rosier=ROSAI, olivier=OLEA, laurier=LAURUS, cyprès=CUPRESSUS, bambou=PHYLLOSTACHYS/FARGESIA, palmier=TRACHYCARPUS/CHAMAEROPS.
-potSize = litrage en litres (ex: 10 pour 10L). 0 si pas précisé.
-height = hauteur en cm si précisée (ex: "100/125" ou "150/200"). Vide si pas précisée.
-IMPORTANT: "100/125" ou "60/80" sont des HAUTEURS en cm, PAS des litrages. Un photinia 100/125 = un photinia de 100 à 125cm de haut.`,
+RÈGLES STRICTES pour searchTerms:
+- Mets TOUJOURS le nom tel qu'écrit par le client en premier
+- Puis le nom botanique latin complet
+- Puis des variantes (nom commun, cultivar, synonymes)
+- Au moins 3-4 termes par plante
+- Exemples: "Phormium Emerald Gem" → ["phormium", "phormium emerald gem", "phormium tenax"]
+- "Hellebore orientale" → ["hellebore", "helleborus", "helleborus orientalis"]
+- "Verveine de Buenos Aires" → ["verveine", "verbena", "verbena bonariensis"]
+
+potSize = litrage en litres. 0 si pas précisé.
+height = hauteur en cm si précisée. Vide si pas précisée.
+"100/125" ou "60/80" = HAUTEURS en cm, PAS des litrages.
+"7/9cm" = hauteur aussi.
+couleur = blanc/blanche/rouge/violet/rose si précisé. Vide sinon.`,
       messages: [{ role: 'user', content: clientText }]
     })
   });
@@ -1997,201 +2008,109 @@ async function generateQuote() {
     const plants = await aiIdentifyPlants(text);
     console.log('Plants identified:', plants);
 
-    // STEP 2-4: Search all sources in parallel for each plant
-    const allResults = {};
-    window._liveSearchResults = []; // Store live results for findProductInData
-    for (const plant of plants) {
-      showLoading(`🔍 Recherche: ${plant.botanicalName}...`);
+    // STEP 2: LOCAL MATCHING (no more Claude step 5)
+    showLoading('🔍 Recherche dans les catalogues...');
+    window._liveSearchResults = [];
 
-      const [pidfResults, excelResults, fleurResults] = await Promise.all([
-        Promise.resolve([]), // PIDF data is in preloaded suppliers
-        Promise.resolve(searchExcelCatalogues(plant.searchTerms, plant.potSize)),
-        Promise.resolve([]) // Fleur Pro is now in preloaded suppliers (Excel)
-      ]);
-
-      const combined = [...pidfResults, ...excelResults, ...fleurResults];
-      allResults[plant.botanicalName] = combined;
-      window._liveSearchResults.push(...combined);
-      console.log(`${plant.botanicalName}: ${combined.length} results`);
-    }
-
-    // STEP 5: Claude compiles the best quote
-    showLoading('📊 Claude compile le devis...');
-    const quoteItems = await aiCompileQuote(plants, allResults);
-
-    // Convert to display format + ENRICH with all suppliers from catalogues
-    const results = quoteItems.map((item, itemIdx) => {
-      // Get the originally requested potSize and height from the AI identification step
-      const originalPlant = plants[itemIdx] || {};
-      const clientRequestedPotSize = originalPlant.potSize || 0;
-      const clientRequestedHeight = originalPlant.height || '';
+    // LOCAL MATCHING: for each plant, search all suppliers by keywords
+    const results = plants.map((plant, itemIdx) => {
+      const clientRequestedPotSize = plant.potSize || 0;
+      const clientRequestedHeight = plant.height || '';
+      const reqText = (plant.requested || '').toLowerCase();
       const matches = [];
 
-      // Best match from Claude — find it in our data first
-      if (item.bestMatch && item.bestMatch.name) {
-        const found = findProductInData(item.bestMatch.name, item.bestMatch.supplier, item.bestMatch.potSize, item.bestMatch.price, item.bestMatch.height);
-        if (found && found.price > 0) {
-          matches.push(found);
-        }
-        // If not found or price 0, don't add — enrichment will find valid products
-      }
-
-      // Alternatives from Claude
-      if (item.alternatives) {
-        for (const alt of item.alternatives) {
-          if (alt.name) {
-            const foundAlt = findProductInData(alt.name, alt.supplier, alt.potSize, alt.price, alt.height);
-            if (foundAlt && foundAlt.price > 0) {
-              matches.push(foundAlt);
-            }
-          }
-        }
-      }
-
-      // ENRICH: search ALL catalogues (including PIDF) for matching plants
-      // Extract color from the client request if present
-      const reqText = (item.requested || '').toLowerCase();
-      const colorKeywords = ['blanche', 'blanc', 'bleue', 'bleu', 'rose', 'rouge', 'jaune', 'violet', 'violette', 'alba', 'white', 'blue', 'pink'];
-      const requestedColor = colorKeywords.find(c => reqText.includes(c)) || '';
-
-      // Use the GENUS name (first word) as the primary search key
-      // Include translations FR→IT/Latin for catalogue matching
+      // Search terms from Claude identification
+      const searchTerms = (plant.searchTerms || []).map(t => t.toLowerCase());
+      // Add translations
       const genusTranslations = {
         'rosier': ['rosai'], 'olivier': ['olea'], 'laurier': ['laurus'],
-        'citronnier': ['citrus'], 'palmier': ['palmier'],
-        'trachycarpus': ['trachycarpus'], 'chamaerops': ['chamaerops'], 'phoenix': ['phoenix'], 'washingtonia': ['washingtonia'],
-        'bambou': ['phyllostachys', 'fargesia', 'bambusa'], 'cypres': ['cupressus', 'cupressocyparis'],
-        'cyprès': ['cupressus', 'cupressocyparis'],
+        'citronnier': ['citrus'], 'cypres': ['cupressus', 'cupressocyparis'], 'cyprès': ['cupressus'],
         'glycine': ['wisteria'], 'lavande': ['lavandula'], 'erable': ['acer'], 'érable': ['acer'],
         'hortensia': ['hydrangea'], 'jasmin': ['trachelospermum', 'jasminum'],
-        'magnolia': ['magnolia'], 'camelia': ['camellia'], 'camélia': ['camellia'],
-        'cerisier': ['prunus', 'cerasus'], 'pommier': ['malus'], 'poirier': ['pyrus'],
-        'figuier': ['ficus'], 'mimosa': ['acacia'], 'bougainvillier': ['bougainvillea'],
-        'hibiscus': ['hibiscus'], 'romarin': ['rosmarinus'], 'thym': ['thymus'], 'sauge': ['salvia'],
+        'cerisier': ['prunus'], 'pommier': ['malus'], 'figuier': ['ficus'],
         'troene': ['ligustrum'], 'troène': ['ligustrum'], 'lilas': ['syringa', 'lagerstroemia'],
-        'houx': ['ilex'], 'charme': ['carpinus'], 'hetre': ['fagus'], 'hêtre': ['fagus'],
-        'bouleau': ['betula'], 'chene': ['quercus'], 'chêne': ['quercus'],
-        'frene': ['fraxinus'], 'frêne': ['fraxinus'], 'tilleul': ['tilia'],
-        'noisetier': ['corylus'], 'amandier': ['prunus'], 'abricotier': ['prunus'],
-        'prunier': ['prunus'], 'pecher': ['prunus'], 'nectarinier': ['prunus'],
-        'mandarinier': ['citrus'], 'oranger': ['citrus'], 'grenadier': ['punica'],
-        'catalpa': ['catalpa'], 'eucalyptus': ['eucalyptus'], 'albizia': ['albizia'],
-        'azalee': ['azalea', 'rhododendron'], 'azalée': ['azalea', 'rhododendron'],
-        'bruyere': ['erica', 'calluna'], 'bruyère': ['erica', 'calluna'],
-        'fusain': ['euonymus'], 'forsythia': ['forsythia'], 'viorne': ['viburnum'],
-        'cornouiller': ['cornus'], 'cotoneaster': ['cotoneaster'],
-        'spiree': ['spiraea'], 'weigelia': ['weigela'], 'deutzia': ['deutzia'],
-        'abelia': ['abelia'], 'buddleia': ['buddleja'], 'clematis': ['clematis'],
-        'clematite': ['clematis'], 'clématite': ['clematis'],
-        'chevrefeuille': ['lonicera'], 'chèvrefeuille': ['lonicera'],
-        'laurier-cerise': ['prunus'], 'laurier-tin': ['viburnum']
+        'houx': ['ilex'], 'charme': ['carpinus'], 'bouleau': ['betula'],
+        'noisetier': ['corylus'], 'grenadier': ['punica'], 'bananier': ['musa', 'ensete'],
+        'verveine': ['verbena'], 'geranium': ['geranium'], 'géranium': ['geranium'],
+        'anemone': ['anemone'], 'anémone': ['anemone'], 'fougere': ['polystichum', 'dryopteris'],
+        'fougère': ['polystichum', 'dryopteris'], 'clematite': ['clematis'], 'clématite': ['clematis']
       };
-      const genusNames = new Set();
-      for (const m of matches) {
-        const firstWord = normalize(m.name).split(' ').find(t => t.length > 3);
-        if (firstWord) {
-          genusNames.add(firstWord);
-          // Add translations
-          const translations = genusTranslations[firstWord];
-          if (translations) translations.forEach(t => genusNames.add(t));
+
+      const allTerms = new Set(searchTerms);
+      for (const term of searchTerms) {
+        const words = term.split(/\s+/);
+        for (const w of words) {
+          if (genusTranslations[w]) genusTranslations[w].forEach(t => allTerms.add(t));
+          allTerms.add(w);
         }
       }
-      // Also add translations from the request text
-      for (const [fr, its] of Object.entries(genusTranslations)) {
-        if (reqText.includes(fr)) its.forEach(t => genusNames.add(t));
-      }
-      // Also extract secondary keywords (species/cultivar) for better filtering
-      const secondaryWords = new Set();
-      for (const m of matches) {
-        const tokens = normalize(m.name).split(' ').filter(t => t.length > 3);
-        tokens.slice(1).forEach(t => secondaryWords.add(t));
+      // Also add words from the original request
+      reqText.split(/\s+/).filter(w => w.length > 3).forEach(w => {
+        allTerms.add(w);
+        if (genusTranslations[w]) genusTranslations[w].forEach(t => allTerms.add(t));
+      });
+
+      const termsArr = [...allTerms].filter(t => t.length > 2);
+
+      // Color keywords
+      const colorMap = { 'blanc': ['blanc', 'blanche', 'alba', 'white', 'albus'],
+        'bleu': ['bleu', 'bleue', 'blue', 'caerulea'], 'rose': ['rose', 'rosea', 'pink'],
+        'rouge': ['rouge', 'red', 'rubra'], 'violet': ['violet', 'violette', 'purple'],
+        'jaune': ['jaune', 'yellow', 'aurea'] };
+      let reqColors = [];
+      for (const [color, variants] of Object.entries(colorMap)) {
+        if (reqText.includes(color) || variants.some(v => reqText.includes(v))) {
+          reqColors = variants;
+          break;
+        }
       }
 
+      // Search ALL suppliers
       const allSuppliers = suppliers.filter(Boolean);
-
-      // Also extract form/shape keywords from the client request for matching catalogue formes
-      const formKeywordsMap = {
-        'arche': ['arc', 'arche'], 'tonneau': ['tonnelle', 'tonneau'], 'tige': ['tige', 'dt'],
-        'boule': ['boule'], 'cone': ['cone'], 'palissade': ['palisse', 'palissade', 'espalier'],
-        'spirale': ['spirale'], 'pergola': ['pergola'], 'grimpant': ['grimpant', 'rampicanti'],
-        'pyramide': ['piram', 'pyramide'], 'parasol': ['parasol'], 'plateau': ['plateau'],
-        'colonne': ['colomne', 'colonne', 'cilindro']
-      };
-      const reqFormWords = [];
-      for (const [word, catalogForms] of Object.entries(formKeywordsMap)) {
-        if (reqText.includes(word)) reqFormWords.push(...catalogForms);
-      }
-      // Also check raw words from request against forme field
-      const reqRawWords = reqText.split(/\s+/).filter(w => w.length > 2);
-
       for (const sup of allSuppliers) {
-        for (const plant of sup.data) {
-          const plantNorm = normalize(plant.name);
-          const plantForme = (plant.forme || '').toLowerCase();
-          // Must contain the genus name (e.g. "photinia", "rosai")
-          let genusMatch = false;
-          for (const genus of genusNames) {
-            if (plantNorm.includes(genus)) { genusMatch = true; break; }
-          }
-          if (!genusMatch) continue;
+        for (const plant_item of sup.data) {
+          const nameNorm = (plant_item.name || '').toLowerCase();
+          const heightNorm = (plant_item.height || '').toLowerCase();
+          const fullText = nameNorm + ' ' + heightNorm;
 
-          // If client asked for a specific form, filter by it
-          if (reqFormWords.length > 0) {
-            const formeMatch = reqFormWords.some(f => plantForme.includes(f) || plantNorm.includes(f));
-            if (!formeMatch && plantForme) continue; // Skip plants with wrong forme
+          // Score: count how many search terms match
+          let score = 0;
+          for (const term of termsArr) {
+            if (nameNorm.includes(term)) score += 2;
+            else if (heightNorm.includes(term)) score += 1;
           }
 
-          // Genus matches - include this plant
-          const exists = matches.find(x => x.name === plant.name && x.supplier === sup.name && x.potSize === plant.potSize && x.height === plant.height && x.forme === plant.forme);
-          if (!exists) {
-            // Check color compatibility
-            const plantFullText = (plantNorm + ' ' + (plant.height || '')).toLowerCase();
-            if (requestedColor) {
-              // Map French color words to what might appear in data
-              const colorMap = { 'blanche': 'blanche', 'blanc': 'blanche', 'bleue': 'bleue', 'bleu': 'bleue', 'rose': 'rose', 'rouge': 'rouge', 'alba': 'alba' };
-              const targetColor = colorMap[requestedColor] || requestedColor;
-              const hasWrongColor = colorKeywords.some(c => plantFullText.includes(c) && !plantFullText.includes(targetColor));
-              if (hasWrongColor) continue; // Skip plants with wrong color
-            }
+          // Need at least 1 strong match (in name)
+          if (score < 2) continue;
 
-            let secHits = 0;
-            for (const sw of secondaryWords) {
-              if (plantNorm.includes(sw)) secHits++;
-            }
+          // Color filter
+          if (reqColors.length > 0) {
+            const hasColor = reqColors.some(c => fullText.includes(c));
+            if (hasColor) score += 5;
+            // Don't filter out — just boost
+          }
+
+          const exists = matches.find(x => x.name === plant_item.name && x.supplier === sup.name && x.potSize === plant_item.potSize && x.height === plant_item.height);
+          if (!exists && plant_item.price > 0) {
             matches.push({
-              ...plant,
+              ...plant_item,
               supplier: sup.name,
-              score: secHits > 0 ? 0.85 : 0.7
+              score: score / termsArr.length
             });
           }
         }
       }
 
-      // Add live search results that match THIS plant's search terms
-      const live = window._liveSearchResults || [];
-      const plantSearchTerms = (originalPlant.searchTerms || []).map(t => t.toLowerCase());
-      for (const lr of live) {
-        if (lr.price <= 0) continue;
-        // Check if this live result matches the plant's search terms
-        const lrName = (lr.name || '').toLowerCase();
-        const isRelevant = plantSearchTerms.some(term => {
-          const termWords = term.split(/\s+/).filter(w => w.length > 3);
-          return termWords.some(w => lrName.includes(w));
-        });
-        if (!isRelevant) continue;
-        const exists = matches.find(x => x.name === lr.name && x.supplier === lr.supplier && x.potSize === lr.potSize);
-        if (!exists) {
-          matches.push({ ...lr, score: 0.8 });
-        }
-      }
+      console.log(`${plant.botanicalName}: ${matches.length} matches from local search`);
+
+      // Return result for this plant
 
       return {
-        requested: item.requested,
-        qty: item.qty || 1,
+        requested: plant.requested,
+        qty: plant.qty || 1,
         matches,
         selected: 0,
         aiPowered: true,
-        // Pass along requested size for pre-selection
         _requestedPotSize: clientRequestedPotSize,
         _requestedHeight: clientRequestedHeight
       };
