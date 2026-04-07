@@ -1300,14 +1300,31 @@ function confirmMapping() {
     const price = parseFloat(row[priceIdx]) || 0;
     if (!name || price <= 0) continue;
 
-    // Parse pot size: extract numeric value from "3", "7-10", "10", "18-25"
+    // Parse pot size: extract numeric value, with conversion for P9/C/FC formats
     let potSize = '';
     let potSizeNum = 0;
     if (potSizeIdx >= 0) {
       potSize = String(row[potSizeIdx] || '').trim();
-      // For ranges like "7-10", take the first number
-      const psMatch = potSize.match(/^(\d+)/);
-      potSizeNum = psMatch ? parseInt(psMatch[1]) : 0;
+      const psUpper = potSize.toUpperCase();
+      // Pot size conversion table (nursery formats → approximate liters)
+      const potConversions = {
+        'P9': 0.5, 'P10': 0.7, 'P10,5': 0.8, 'P10.5': 0.8, 'P11': 1, 'P12': 1,
+        'P13': 1.5, 'P14': 2, 'P15': 2, 'P17': 3, 'P19': 5, 'P21': 7,
+        'GODET': 0.3, 'GODET 8': 0.3, 'GODET 9': 0.5, 'ALVÉOLE': 0.1
+      };
+      // Check direct conversion first
+      const directMatch = Object.keys(potConversions).find(k => psUpper === k || psUpper.startsWith(k + ' '));
+      if (directMatch) {
+        potSizeNum = potConversions[directMatch];
+      } else {
+        // Try to extract "C 2L" → 2, "FC 3,5L" → 3.5, "5L" → 5, "CT10" → 10
+        const clMatch = potSize.match(/(?:^|[CF]+\s*)(\d+[.,]?\d*)\s*L/i);
+        const ctMatch = potSize.match(/CT\s*(\d+)/i);
+        const numMatch = potSize.match(/^(\d+[.,]?\d*)/);
+        if (clMatch) potSizeNum = parseFloat(clMatch[1].replace(',', '.'));
+        else if (ctMatch) potSizeNum = parseInt(ctMatch[1]);
+        else if (numMatch) potSizeNum = parseFloat(numMatch[1].replace(',', '.'));
+      }
     }
 
     parsedData.push({
@@ -2014,7 +2031,8 @@ async function generateQuote() {
 
     // === SHARED UTILITIES ===
     const genusTranslations = {
-      'rosier': ['rosai'], 'olivier': ['olea'], 'laurier': ['laurus'],
+      // Arbres & arbustes
+      'rosier': ['rosa', 'rosai'], 'olivier': ['olea'], 'laurier': ['laurus', 'prunus'],
       'citronnier': ['citrus'], 'cypres': ['cupressus', 'cupressocyparis'], 'cyprès': ['cupressus'],
       'glycine': ['wisteria'], 'lavande': ['lavandula'], 'erable': ['acer'], 'érable': ['acer'],
       'hortensia': ['hydrangea'], 'jasmin': ['trachelospermum', 'jasminum'],
@@ -2022,9 +2040,41 @@ async function generateQuote() {
       'troene': ['ligustrum'], 'troène': ['ligustrum'], 'lilas': ['syringa', 'lagerstroemia'],
       'houx': ['ilex'], 'charme': ['carpinus'], 'bouleau': ['betula'],
       'noisetier': ['corylus'], 'grenadier': ['punica'], 'bananier': ['musa', 'ensete'],
+      'fusain': ['euonymus'], 'oranger': ['citrus'], 'abricotier': ['prunus'],
+      'magnolia': ['magnolia'], 'camellia': ['camellia'], 'camélia': ['camellia'],
+      'bambou': ['phyllostachys', 'fargesia', 'bambusa'], 'mimosa': ['acacia'],
+      'tamaris': ['tamarix'], 'cornouiller': ['cornus'], 'viorne': ['viburnum'],
+      'sureau': ['sambucus'], 'cognassier': ['chaenomeles', 'cydonia'],
+      'saule': ['salix'], 'peuplier': ['populus'], 'tilleul': ['tilia'],
+      'platane': ['platanus'], 'chene': ['quercus'], 'chêne': ['quercus'],
+      'frene': ['fraxinus'], 'frêne': ['fraxinus'], 'pin': ['pinus'],
+      'sapin': ['abies'], 'thuya': ['thuja'], 'genévrier': ['juniperus'], 'genevrier': ['juniperus'],
+      'if': ['taxus'], 'cèdre': ['cedrus'], 'cedre': ['cedrus'],
+      // Palmiers
+      'palmier': ['trachycarpus', 'chamaerops', 'washingtonia', 'phoenix', 'butia', 'brahea'],
+      // Vivaces & graminées
       'verveine': ['verbena'], 'geranium': ['geranium'], 'géranium': ['geranium'],
-      'anemone': ['anemone'], 'anémone': ['anemone'], 'fougere': ['polystichum', 'dryopteris'],
-      'fougère': ['polystichum', 'dryopteris'], 'clematite': ['clematis'], 'clématite': ['clematis']
+      'anemone': ['anemone'], 'anémone': ['anemone'],
+      'fougere': ['polystichum', 'dryopteris', 'athyrium', 'asplenium'],
+      'fougère': ['polystichum', 'dryopteris', 'athyrium', 'asplenium'],
+      'clematite': ['clematis'], 'clématite': ['clematis'],
+      'sauge': ['salvia', 'perovskia'], 'marguerite': ['leucanthemum', 'argyranthemum'],
+      'oeillet': ['dianthus'], 'iris': ['iris'], 'pivoine': ['paeonia'],
+      'campanule': ['campanula'], 'digitale': ['digitalis'],
+      'lupin': ['lupinus'], 'achillée': ['achillea'], 'achillee': ['achillea'],
+      'agapanthe': ['agapanthus'], 'aster': ['aster'],
+      'chrysanthème': ['chrysanthemum'], 'chrysantheme': ['chrysanthemum'],
+      'dahlia': ['dahlia'], 'delphinium': ['delphinium'],
+      'echinacée': ['echinacea'], 'echinacee': ['echinacea'],
+      'gaillarde': ['gaillardia'], 'gaura': ['gaura', 'oenothera'],
+      'hellébore': ['helleborus'], 'hellebore': ['helleborus'],
+      'hémérocalle': ['hemerocallis'], 'hemerocalle': ['hemerocallis'],
+      'kniphofia': ['kniphofia'], 'népéta': ['nepeta'], 'nepeta': ['nepeta'],
+      'phlox': ['phlox'], 'rudbeckia': ['rudbeckia'], 'sedum': ['sedum'],
+      'véronique': ['veronica'], 'veronique': ['veronica'],
+      // Graminées
+      'herbe': ['miscanthus', 'pennisetum', 'stipa', 'cortaderia'],
+      'pampa': ['cortaderia']
     };
     function wordMatch(text, word) {
       const re = new RegExp('(^|[\\s(\'"/,])' + word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '($|[\\s)\'"/,])', 'i');
@@ -2062,13 +2112,19 @@ async function generateQuote() {
         const nameNorm = (item.name || '').toLowerCase();
         const heightNorm = (item.height || '').toLowerCase();
 
-        // STRICT genus match: botanical genus must be in product name as whole word
-        // OR any searchTerm (from Claude) with >4 chars must be in product name
+        // GENUS match for PIDF: botanical genus OR any individual word from searchTerms
+        // "rosa" → matches "Rosa" products, "rosier" → matches "Rosier grimpant"
         let genusOk = false;
+        // 1) Botanical genus as whole word
         if (genus.length > 3 && wordMatch(nameNorm, genus)) genusOk = true;
+        // 2) Any individual word (>3 chars) from searchTerms in product name
         if (!genusOk) {
           for (const st of searchTerms) {
-            if (st.length > 4 && nameNorm.includes(st)) { genusOk = true; break; }
+            const words = st.split(/\s+/);
+            for (const w of words) {
+              if (w.length > 3 && nameNorm.includes(w)) { genusOk = true; break; }
+            }
+            if (genusOk) break;
           }
         }
         if (!genusOk) continue;
@@ -2991,9 +3047,30 @@ async function refreshFleurPro(event) {
       const price = parseFloat(row[3]) || 0;
       if (!name || !taille || price <= 0) continue;
 
-      const potMatch = taille.match(/(\d+)\s*L/i);
-      const potSize = potMatch ? potMatch[1] : '';
-      const potSizeNum = potSize ? parseInt(potSize) : 0;
+      // Parse pot size with conversion table for P9/C/FC formats
+      let potSize = '', potSizeNum = 0;
+      const tUpper = taille.toUpperCase();
+      const potConv = {
+        'P9': 0.5, 'P10': 0.7, 'P10,5': 0.8, 'P10.5': 0.8, 'P11': 1, 'P12': 1,
+        'P13': 1.5, 'P14': 2, 'P15': 2, 'P17': 3, 'P19': 5, 'P21': 7,
+        'GODET': 0.3
+      };
+      const directPot = Object.keys(potConv).find(k => tUpper.startsWith(k + ' ') || tUpper === k);
+      if (directPot) {
+        potSizeNum = potConv[directPot];
+        potSize = directPot;
+      } else {
+        // "C 2L" → 2, "FC 3,5L" → 3.5, "5L" → 5
+        const clMatch = taille.match(/(?:^|[CF]+\s*)(\d+[.,]?\d*)\s*L/i);
+        if (clMatch) {
+          potSizeNum = parseFloat(clMatch[1].replace(',', '.'));
+          potSize = String(potSizeNum);
+        } else {
+          const numMatch = taille.match(/(\d+)\s*L/i);
+          potSize = numMatch ? numMatch[1] : '';
+          potSizeNum = potSize ? parseInt(potSize) : 0;
+        }
+      }
       const heightMatch = taille.match(/(\d{2,3}\/[\d+]+)/);
       const height = heightMatch ? heightMatch[1] : '';
       const formeMatch = taille.match(/\b(TIGE|DT|DEMI-TIGE|BOULE|CONE|ESPALIER|PALISSE|ARC|PYRAMIDE|CHAMPIGNON|SPIRALE|PARASOL|TONNELLE)\b/i);
