@@ -787,6 +787,7 @@ body {
   <div class="nav">
     <button class="nav-btn active" onclick="showPage('dashboard')">Fournisseurs</button>
     <button class="nav-btn" onclick="showPage('quote')">Nouveau devis</button>
+    <button class="nav-btn" onclick="showPage('architecture')">Architecture IA</button>
   </div>
   <div class="header-right">
     <span class="supplier-count" id="supplierCount"><strong>0</strong> fournisseur chargé</span>
@@ -838,6 +839,80 @@ body {
       <div id="feedbackBoard" style="display:flex;flex-direction:column;gap:10px;">
         <div style="text-align:center;color:var(--text-secondary);font-size:13px;padding:20px;">Chargement des idées...</div>
       </div>
+    </div>
+  </div>
+
+  <!-- ========== PAGE: ARCHITECTURE IA ========== -->
+  <div class="page" id="page-architecture">
+    <h1 class="page-title">Architecture IA</h1>
+    <p class="page-subtitle">Pipeline de traitement des devis — prompts modifiables en temps réel</p>
+
+    <!-- Schema visuel du pipeline -->
+    <div style="display:flex;align-items:center;justify-content:center;gap:0;margin:24px 0 32px;flex-wrap:wrap;">
+      <!-- Étape 1 -->
+      <div style="background:#e8f5e9;border:2px solid #4caf50;border-radius:12px;padding:16px 20px;min-width:200px;max-width:260px;text-align:center;">
+        <div style="font-size:24px;margin-bottom:6px;">🧠</div>
+        <div style="font-weight:700;font-size:14px;color:#2e7d32;">Étape 1 — Identification</div>
+        <div style="font-size:12px;color:#555;margin-top:4px;">Claude traduit les noms FR → Latin et extrait quantités, tailles, couleurs</div>
+        <div style="font-size:11px;color:#888;margin-top:6px;">Modèle : <span id="arch-model-1">claude-sonnet-4-6</span></div>
+      </div>
+      <!-- Flèche -->
+      <div style="font-size:28px;color:#4caf50;padding:0 8px;">→</div>
+      <!-- Étape 2 -->
+      <div style="background:#e3f2fd;border:2px solid #1976d2;border-radius:12px;padding:16px 20px;min-width:200px;max-width:260px;text-align:center;">
+        <div style="font-size:24px;margin-bottom:6px;">🔍</div>
+        <div style="font-weight:700;font-size:14px;color:#1565c0;">Étape 2 — Matching local</div>
+        <div style="font-size:12px;color:#555;margin-top:4px;">Recherche PIDF-first dans 59 912 produits, puis wholesale si non trouvé</div>
+        <div style="font-size:11px;color:#888;margin-top:6px;">100% local — pas d'IA</div>
+      </div>
+      <!-- Flèche -->
+      <div style="font-size:28px;color:#1976d2;padding:0 8px;">→</div>
+      <!-- Étape 3 -->
+      <div style="background:#fff3e0;border:2px solid #f57c00;border-radius:12px;padding:16px 20px;min-width:200px;max-width:260px;text-align:center;">
+        <div style="font-size:24px;margin-bottom:6px;">✅</div>
+        <div style="font-weight:700;font-size:14px;color:#e65100;">Étape 3 — Vérification IA</div>
+        <div style="font-size:12px;color:#555;margin-top:4px;">Claude vérifie que chaque match a du sens (genre correct)</div>
+        <div style="font-size:11px;color:#888;margin-top:6px;">Modèle : <span id="arch-model-3">claude-sonnet-4-6</span></div>
+      </div>
+    </div>
+
+    <!-- Prompts éditables -->
+    <div style="display:flex;flex-direction:column;gap:20px;">
+
+      <!-- Agent 1: Identification -->
+      <div style="background:var(--card);border-radius:var(--radius);padding:24px;box-shadow:var(--shadow);border-left:4px solid #4caf50;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <h3 style="font-size:16px;margin:0;color:#2e7d32;">🧠 Agent 1 — Identification des plantes</h3>
+          <span id="prompt1Status" style="font-size:12px;color:var(--text-secondary);"></span>
+        </div>
+        <label style="font-size:12px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:4px;">Prompt système :</label>
+        <textarea id="prompt1Text" style="width:100%;min-height:200px;border:1px solid var(--border);border-radius:8px;padding:12px;font-size:12px;font-family:'Courier New',monospace;resize:vertical;box-sizing:border-box;line-height:1.5;" oninput="document.getElementById('prompt1Status').textContent='⚠ Modifié (non sauvegardé)';document.getElementById('prompt1Status').style.color='#e67e22';"></textarea>
+        <div style="display:flex;gap:12px;align-items:center;margin-top:8px;">
+          <label style="font-size:12px;color:var(--text-secondary);">Modèle :</label>
+          <input id="prompt1Model" value="claude-sonnet-4-6" style="border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;width:200px;">
+          <label style="font-size:12px;color:var(--text-secondary);">Max tokens :</label>
+          <input id="prompt1Tokens" type="number" value="8192" style="border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;width:80px;">
+          <button class="btn btn-primary" onclick="savePrompt('identification')" style="margin-left:auto;font-size:13px;padding:6px 16px;">Sauvegarder</button>
+        </div>
+      </div>
+
+      <!-- Agent 3: Vérification -->
+      <div style="background:var(--card);border-radius:var(--radius);padding:24px;box-shadow:var(--shadow);border-left:4px solid #f57c00;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <h3 style="font-size:16px;margin:0;color:#e65100;">✅ Agent 2 — Vérification post-matching</h3>
+          <span id="prompt3Status" style="font-size:12px;color:var(--text-secondary);"></span>
+        </div>
+        <label style="font-size:12px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:4px;">Prompt système :</label>
+        <textarea id="prompt3Text" style="width:100%;min-height:120px;border:1px solid var(--border);border-radius:8px;padding:12px;font-size:12px;font-family:'Courier New',monospace;resize:vertical;box-sizing:border-box;line-height:1.5;" oninput="document.getElementById('prompt3Status').textContent='⚠ Modifié (non sauvegardé)';document.getElementById('prompt3Status').style.color='#e67e22';"></textarea>
+        <div style="display:flex;gap:12px;align-items:center;margin-top:8px;">
+          <label style="font-size:12px;color:var(--text-secondary);">Modèle :</label>
+          <input id="prompt3Model" value="claude-sonnet-4-6" style="border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;width:200px;">
+          <label style="font-size:12px;color:var(--text-secondary);">Max tokens :</label>
+          <input id="prompt3Tokens" type="number" value="1024" style="border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;width:80px;">
+          <button class="btn btn-primary" onclick="savePrompt('verification')" style="margin-left:auto;font-size:13px;padding:6px 16px;">Sauvegarder</button>
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -907,6 +982,7 @@ function init() {
   renderSupplierCards();
   updateSupplierCount();
   loadFeedbackBoard();
+  loadPrompts();
 }
 
 // ============ PAGES ============
@@ -916,7 +992,8 @@ function showPage(page) {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => {
     if ((page === 'dashboard' && b.textContent === 'Fournisseurs') ||
-        (page === 'quote' && b.textContent === 'Nouveau devis')) {
+        (page === 'quote' && b.textContent === 'Nouveau devis') ||
+        (page === 'architecture' && b.textContent === 'Architecture IA')) {
       b.classList.add('active');
     }
   });
@@ -1679,33 +1756,9 @@ async function aiIdentifyPlants(clientText) {
       'anthropic-dangerous-direct-browser-access': 'true'
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 8192,
-      system: `Tu es un expert en horticulture/pépinière. Analyse la demande client et identifie CHAQUE plante (une ligne = une plante, ne fusionne JAMAIS deux lignes).
-
-Pour chaque plante:
-- Corrige les fautes d'orthographe (fautinia → photinia, gora → gaura, etc.)
-- Donne le NOM EXACT tel qu'écrit par le client + le nom botanique latin
-- IMPORTANT: NE CHANGE PAS le genre de la plante. "Phormium" reste "Phormium", "Hellebore" reste "Helleborus", "Verveine" reste "Verbena". Ne confonds JAMAIS avec un autre genre.
-- Extrais la quantité, la taille/litrage, la hauteur, la couleur
-
-RÉPONDS UNIQUEMENT en JSON (un objet par LIGNE de la demande):
-[{"requested":"texte original de la ligne","qty":5,"botanicalName":"Photinia fraseri","searchTerms":["photinia","photinia fraseri","photinia red robin"],"potSize":10,"height":"","forme":"","couleur":""}]
-
-RÈGLES STRICTES pour searchTerms:
-- Mets TOUJOURS le nom tel qu'écrit par le client en premier
-- Puis le nom botanique latin complet
-- Puis des variantes (nom commun, cultivar, synonymes)
-- Au moins 3-4 termes par plante
-- Exemples: "Phormium Emerald Gem" → ["phormium", "phormium emerald gem", "phormium tenax"]
-- "Hellebore orientale" → ["hellebore", "helleborus", "helleborus orientalis"]
-- "Verveine de Buenos Aires" → ["verveine", "verbena", "verbena bonariensis"]
-
-potSize = litrage en litres. 0 si pas précisé.
-height = hauteur en cm si précisée. Vide si pas précisée.
-"100/125" ou "60/80" = HAUTEURS en cm, PAS des litrages.
-"7/9cm" = hauteur aussi.
-couleur = blanc/blanche/rouge/violet/rose si précisé. Vide sinon.`,
+      model: window._aiPrompts?.identification?.model || 'claude-sonnet-4-6',
+      max_tokens: window._aiPrompts?.identification?.maxTokens || 8192,
+      system: window._aiPrompts?.identification?.text || DEFAULT_PROMPTS.identification,
       messages: [{ role: 'user', content: clientText }]
     })
   });
@@ -2353,13 +2406,9 @@ async function generateQuote() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
           body: JSON.stringify({
-            model: 'claude-sonnet-4-6',
-            max_tokens: 1024,
-            system: `Tu vérifies des correspondances entre des plantes demandées et des plantes trouvées dans un catalogue.
-Pour chaque ligne, réponds UNIQUEMENT "OK" si la plante trouvée correspond bien au genre/espèce demandé, ou "FAUX" si c'est une plante complètement différente.
-Un cultivar différent du même genre est OK (Rosa 'American Pillar' pour un Rosier = OK).
-Un genre différent est FAUX (Trachycarpus pour un Hosta = FAUX, Eucalyptus pour un Bananier = FAUX).
-Réponds en JSON: [{"idx":1,"ok":true},{"idx":2,"ok":false},...]`,
+            model: window._aiPrompts?.verification?.model || 'claude-sonnet-4-6',
+            max_tokens: window._aiPrompts?.verification?.maxTokens || 1024,
+            system: window._aiPrompts?.verification?.text || DEFAULT_PROMPTS.verification,
             messages: [{ role: 'user', content: verifyPrompt }]
           })
         });
@@ -3331,6 +3380,104 @@ async function refreshFleurPro(event) {
   }
 
   event.target.value = '';
+}
+
+// ============ ARCHITECTURE IA — Prompts dynamiques ============
+// Default prompts (used if Supabase has nothing)
+const DEFAULT_PROMPTS = {
+  identification: `Tu es un expert en horticulture/pépinière. Analyse la demande client et identifie CHAQUE plante (une ligne = une plante, ne fusionne JAMAIS deux lignes).
+
+Pour chaque plante:
+- Corrige les fautes d'orthographe (fautinia → photinia, gora → gaura, etc.)
+- Donne le NOM EXACT tel qu'écrit par le client + le nom botanique latin
+- IMPORTANT: NE CHANGE PAS le genre de la plante. "Phormium" reste "Phormium", "Hellebore" reste "Helleborus", "Verveine" reste "Verbena". Ne confonds JAMAIS avec un autre genre.
+- Extrais la quantité, la taille/litrage, la hauteur, la couleur
+
+RÉPONDS UNIQUEMENT en JSON (un objet par LIGNE de la demande):
+[{"requested":"texte original de la ligne","qty":5,"botanicalName":"Photinia fraseri","searchTerms":["photinia","photinia fraseri","photinia red robin"],"potSize":10,"height":"","forme":"","couleur":""}]
+
+RÈGLES STRICTES pour searchTerms:
+- Mets TOUJOURS le nom tel qu'écrit par le client en premier
+- Puis le nom botanique latin complet
+- Puis des variantes (nom commun, cultivar, synonymes)
+- Au moins 3-4 termes par plante
+- Exemples: "Phormium Emerald Gem" → ["phormium", "phormium emerald gem", "phormium tenax"]
+- "Hellebore orientale" → ["hellebore", "helleborus", "helleborus orientalis"]
+- "Verveine de Buenos Aires" → ["verveine", "verbena", "verbena bonariensis"]
+
+potSize = litrage en litres. 0 si pas précisé.
+height = hauteur en cm si précisée. Vide si pas précisée.
+"100/125" ou "60/80" = HAUTEURS en cm, PAS des litrages.
+"7/9cm" = hauteur aussi.
+couleur = blanc/blanche/rouge/violet/rose si précisé. Vide sinon.`,
+  verification: `Tu vérifies des correspondances entre des plantes demandées et des plantes trouvées dans un catalogue.
+Pour chaque ligne, réponds UNIQUEMENT "OK" si la plante trouvée correspond bien au genre/espèce demandé, ou "FAUX" si c'est une plante complètement différente.
+Un cultivar différent du même genre est OK (Rosa 'American Pillar' pour un Rosier = OK).
+Un genre différent est FAUX (Trachycarpus pour un Hosta = FAUX, Eucalyptus pour un Bananier = FAUX).
+Réponds en JSON: [{"idx":1,"ok":true},{"idx":2,"ok":false},...]`
+};
+
+window._aiPrompts = {
+  identification: { text: DEFAULT_PROMPTS.identification, model: 'claude-sonnet-4-6', maxTokens: 8192 },
+  verification: { text: DEFAULT_PROMPTS.verification, model: 'claude-sonnet-4-6', maxTokens: 1024 }
+};
+
+async function loadPrompts() {
+  try {
+    const { data } = await supabaseClient.from('app_prompts').select('*');
+    if (data) {
+      for (const row of data) {
+        if (row.key === 'prompt_identification') window._aiPrompts.identification.text = row.value;
+        if (row.key === 'prompt_verification') window._aiPrompts.verification.text = row.value;
+        if (row.key === 'model_identification') window._aiPrompts.identification.model = row.value;
+        if (row.key === 'model_verification') window._aiPrompts.verification.model = row.value;
+        if (row.key === 'tokens_identification') window._aiPrompts.identification.maxTokens = parseInt(row.value);
+        if (row.key === 'tokens_verification') window._aiPrompts.verification.maxTokens = parseInt(row.value);
+      }
+    }
+  } catch(e) { console.warn('Could not load prompts from Supabase:', e.message); }
+  // Fill textareas
+  const p1 = document.getElementById('prompt1Text');
+  const p3 = document.getElementById('prompt3Text');
+  if (p1) p1.value = window._aiPrompts.identification.text;
+  if (p3) p3.value = window._aiPrompts.verification.text;
+  const m1 = document.getElementById('prompt1Model');
+  const m3 = document.getElementById('prompt3Model');
+  if (m1) m1.value = window._aiPrompts.identification.model;
+  if (m3) m3.value = window._aiPrompts.verification.model;
+  const t1 = document.getElementById('prompt1Tokens');
+  const t3 = document.getElementById('prompt3Tokens');
+  if (t1) t1.value = window._aiPrompts.identification.maxTokens;
+  if (t3) t3.value = window._aiPrompts.verification.maxTokens;
+}
+
+async function savePrompt(agent) {
+  const prefix = agent === 'identification' ? 'prompt1' : 'prompt3';
+  const statusEl = document.getElementById(prefix + 'Status');
+  const text = document.getElementById(prefix + 'Text').value;
+  const model = document.getElementById(prefix + 'Model').value;
+  const tokens = document.getElementById(prefix + 'Tokens').value;
+  statusEl.textContent = 'Sauvegarde...';
+  statusEl.style.color = 'var(--text-secondary)';
+  try {
+    const pairs = [
+      { key: 'prompt_' + agent, value: text },
+      { key: 'model_' + agent, value: model },
+      { key: 'tokens_' + agent, value: tokens }
+    ];
+    for (const p of pairs) {
+      await supabaseClient.from('app_prompts').upsert({ key: p.key, value: p.value, updated_at: new Date().toISOString() });
+    }
+    // Update live prompts
+    window._aiPrompts[agent].text = text;
+    window._aiPrompts[agent].model = model;
+    window._aiPrompts[agent].maxTokens = parseInt(tokens);
+    statusEl.textContent = '✅ Sauvegardé';
+    statusEl.style.color = 'var(--success)';
+  } catch(e) {
+    statusEl.textContent = '❌ ' + e.message;
+    statusEl.style.color = 'var(--danger)';
+  }
 }
 
 // ============ FEEDBACK (Supabase) ============
