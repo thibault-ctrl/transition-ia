@@ -2481,15 +2481,26 @@ Réponds en JSON: [{"idx":1,"ok":true},{"idx":2,"ok":false},...]`,
             bestVar = startVar;
             bestSize = keywordSizeMatch.si;
           } else {
-            // No close match — search all varieties
+            // Search OTHER varieties — PIDF varieties first, then non-PIDF
+            // This ensures we never pick Fleur Pro over PIDF just for a better size
+            const pidfVars = [], otherVars = [];
             for (let vi = 0; vi < r.varieties.length; vi++) {
+              if (vi === startVar) continue;
+              if (r.varieties[vi].items?.some(m => isPIDFSupplier(m.supplier))) pidfVars.push(vi);
+              else otherVars.push(vi);
+            }
+            // Search PIDF varieties first
+            for (const vi of pidfVars) {
               const match = searchSizeInVariety(vi);
-              if (match.dist < bestDist) {
-                bestDist = match.dist;
-                bestVar = vi;
-                bestSize = match.si;
+              if (match.dist < bestDist) { bestDist = match.dist; bestVar = vi; bestSize = match.si; }
+            }
+            // Only search non-PIDF if no PIDF match found at all
+            if (bestSize < 0) {
+              for (const vi of otherVars) {
+                const match = searchSizeInVariety(vi);
+                if (match.dist < bestDist) { bestDist = match.dist; bestVar = vi; bestSize = match.si; }
+                if (bestDist === 0) break;
               }
-              if (bestDist === 0) break;
             }
           }
         } else if (reqHeight) {
@@ -2537,8 +2548,14 @@ Réponds en JSON: [{"idx":1,"ok":true},{"idx":2,"ok":false},...]`,
             bestVar = heightStartVar;
             bestSize = keywordMatch.si;
           } else {
-            // No good match — search other varieties
+            // No good match — search PIDF varieties first, then others
+            const pidfHVars = [], otherHVars = [];
             for (let vi = 0; vi < r.varieties.length; vi++) {
+              if (vi === heightStartVar) continue;
+              if (r.varieties[vi].items?.some(m => isPIDFSupplier(m.supplier))) pidfHVars.push(vi);
+              else otherHVars.push(vi);
+            }
+            for (const vi of pidfHVars) {
               const match = searchHeightInVariety(vi);
               if (match.dist < bestHeightDist) {
                 bestHeightDist = match.dist;
@@ -2547,6 +2564,19 @@ Réponds en JSON: [{"idx":1,"ok":true},{"idx":2,"ok":false},...]`,
                 bestSize = match.si;
               }
               if (bestHeightDist === 0) break;
+            }
+            // Only search non-PIDF if no PIDF match found
+            if (bestSize < 0) {
+              for (const vi of otherHVars) {
+                const match = searchHeightInVariety(vi);
+                if (match.dist < bestHeightDist) {
+                  bestHeightDist = match.dist;
+                  bestDist = match.dist === 0 ? 0 : Math.min(match.dist, 2);
+                  bestVar = vi;
+                  bestSize = match.si;
+                }
+                if (bestHeightDist === 0) break;
+              }
             }
           }
         }
