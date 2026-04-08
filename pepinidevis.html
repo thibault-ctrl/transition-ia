@@ -2778,8 +2778,27 @@ function renderResults(results) {
       continue;
     }
 
-    const selVar = Math.min(r.selectedVariety, r.varieties.length - 1);
-    const variety = r.varieties[selVar];
+    let selVar = Math.min(r.selectedVariety, r.varieties.length - 1);
+    let variety = r.varieties[selVar];
+
+    // If PIDF has this plant but current variety has no PIDF items,
+    // check if another variety with the SAME cultivar key has PIDF items
+    if (r.pidfHasPlant && !variety.items?.some(m => isPIDFSupplier(m.supplier))) {
+      for (let vi = 0; vi < r.varieties.length; vi++) {
+        if (vi === selVar) continue;
+        const v = r.varieties[vi];
+        if (!v.items?.some(m => isPIDFSupplier(m.supplier))) continue;
+        // Only switch if this variety has a similar name (same genus)
+        const curGenus = (variety.name || '').toLowerCase().split(/\s+/)[0];
+        const newGenus = (v.name || '').toLowerCase().split(/\s+/)[0];
+        if (curGenus && newGenus && (curGenus === newGenus || newGenus.includes(curGenus) || curGenus.includes(newGenus))) {
+          selVar = vi;
+          variety = v;
+          r.selectedVariety = vi;
+          break;
+        }
+      }
+    }
 
     // Threshold: if best variety score is very low, warn user
     if (variety.score < 0.15 && r.varieties.length <= 2) {
@@ -2822,20 +2841,9 @@ function renderResults(results) {
     let selSup = Math.min(r.selectedSupplier ?? 0, supplierNames.length - 1);
     let selectedSupplierName = supplierNames[selSup] || supplierNames[0];
 
-    // FORCE PIDF: if PIDF has this plant but current variety doesn't have PIDF items,
-    // switch to a VARIETY that has PIDF items, then set PIDF as supplier
-    const currentVarHasPidf = variety.items?.some(m => isPIDFSupplier(m.supplier));
-    if (r.pidfHasPlant && !currentVarHasPidf) {
-      // Find a variety that has PIDF items (sorted by reviews already)
-      const pidfVarIdx = r.varieties.findIndex(v => v.items?.some(m => isPIDFSupplier(m.supplier)));
-      if (pidfVarIdx >= 0 && pidfVarIdx !== selVar) {
-        r.selectedVariety = pidfVarIdx;
-        selVar = pidfVarIdx;
-        variety = r.varieties[pidfVarIdx];
-      }
-    }
-    // Ensure PIDF is selected as supplier
-    if (r.pidfHasPlant && !isPIDFSupplier(selectedSupplierName)) {
+    // If PIDF is available for the selected variety, ensure it's the default supplier
+    const varHasPidf = variety.items?.some(m => isPIDFSupplier(m.supplier));
+    if (varHasPidf && !isPIDFSupplier(selectedSupplierName)) {
       const pidfSupIdx = supplierNames.findIndex(n => isPIDFSupplier(n));
       if (pidfSupIdx >= 0) {
         selSup = pidfSupIdx;
