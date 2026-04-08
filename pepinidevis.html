@@ -1572,7 +1572,7 @@ function parseClientRequest(text) {
 
 // ============ API KEY MANAGEMENT ============
 function getApiKey() {
-  return localStorage.getItem('pepinidevis_apikey') || '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';
+  return localStorage.getItem('pepinidevis_apikey') || '';
 }
 
 function saveApiKey(key) {
@@ -3350,17 +3350,15 @@ async function startup() {
     }
   } catch (e) { console.warn('Failed to load suppliers:', e); }
 
-  // Auto-load API key from server .env
+  // Auto-load API key from Supabase (secure, not in code)
   if (!localStorage.getItem('pepinidevis_apikey')) {
     try {
-      const configResp = await fetch('/api/config');
-      if (configResp.ok) {
-        const config = await configResp.json();
-        if (config.apiKey) {
-          localStorage.setItem('pepinidevis_apikey', config.apiKey);
-        }
+      const { data } = await supabaseClient.from('app_config').select('value').eq('key', 'anthropic_api_key').single();
+      if (data?.value) {
+        localStorage.setItem('pepinidevis_apikey', data.value);
+        console.log('API key loaded from Supabase');
       }
-    } catch(e) {}
+    } catch(e) { console.warn('Could not load API key from Supabase:', e.message); }
   }
 
   init();
