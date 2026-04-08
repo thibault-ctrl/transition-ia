@@ -2816,9 +2816,20 @@ function renderResults(results) {
       });
     }
 
-    // --- Step 2: Select supplier ---
-    const selSup = Math.min(r.selectedSupplier ?? 0, supplierNames.length - 1);
-    const selectedSupplierName = supplierNames[selSup] || supplierNames[0];
+    // --- Step 2: Select supplier (PIDF first if available) ---
+    let selSup = Math.min(r.selectedSupplier ?? 0, supplierNames.length - 1);
+    let selectedSupplierName = supplierNames[selSup] || supplierNames[0];
+
+    // FORCE PIDF: if PIDF has this plant but current variety doesn't have PIDF items,
+    // switch to a variety that does
+    if (r.pidfHasPlant && !isPIDFSupplier(selectedSupplierName)) {
+      // Find PIDF in supplierNames
+      const pidfSupIdx = supplierNames.findIndex(n => isPIDFSupplier(n));
+      if (pidfSupIdx >= 0) {
+        selSup = pidfSupIdx;
+        selectedSupplierName = supplierNames[pidfSupIdx];
+      }
+    }
 
     // --- Step 3: Get sizes for this supplier (search current variety + cross-variety) ---
     const supplierSizes = [];
