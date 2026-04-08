@@ -2338,6 +2338,67 @@ async function generateQuote() {
       };
     });
 
+    // === STEP 3: AI VERIFICATION — check that top matches make sense ===
+    showLoading('🔍 Vérification des résultats...');
+    try {
+      const structured = structureResults(results);
+      // Build verification pairs: requested → top variety name
+      const pairs = structured.map((r, i) => {
+        const topVar = r.varieties?.[0];
+        return { idx: i, requested: r.requested, matched: topVar?.name || 'AUCUN' };
+      }).filter(p => p.matched !== 'AUCUN');
+
+      if (pairs.length > 0) {
+        const verifyPrompt = pairs.map(p => `${p.idx + 1}. "${p.requested}" → "${p.matched}"`).join('\n');
+        const verifyResp = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-6',
+            max_tokens: 1024,
+            system: `Tu vérifies des correspondances entre des plantes demandées et des plantes trouvées dans un catalogue.
+Pour chaque ligne, réponds UNIQUEMENT "OK" si la plante trouvée correspond bien au genre/espèce demandé, ou "FAUX" si c'est une plante complètement différente.
+Un cultivar différent du même genre est OK (Rosa 'American Pillar' pour un Rosier = OK).
+Un genre différent est FAUX (Trachycarpus pour un Hosta = FAUX, Eucalyptus pour un Bananier = FAUX).
+Réponds en JSON: [{"idx":1,"ok":true},{"idx":2,"ok":false},...]`,
+            messages: [{ role: 'user', content: verifyPrompt }]
+          })
+        });
+
+        if (verifyResp.ok) {
+          const verifyData = await verifyResp.json();
+          const verifyText = verifyData.content[0].text;
+          const jsonMatch = verifyText.match(/\[[\s\S]*\]/);
+          if (jsonMatch) {
+            const verdicts = JSON.parse(jsonMatch[0]);
+            // For FAUX results: remove bad matches and re-sort varieties
+            for (const v of verdicts) {
+              if (!v.ok && v.idx > 0) {
+                const rIdx = v.idx - 1;
+                const r = results[rIdx];
+                if (r && r.matches) {
+                  // Get the bad variety name
+                  const badStruct = structured[rIdx];
+                  const badVarName = badStruct?.varieties?.[0]?.name?.toLowerCase() || '';
+                  // Remove matches that belong to this bad variety
+                  r.matches = r.matches.filter(m => {
+                    const mName = (m.name || '').toLowerCase();
+                    // Keep if it doesn't match the bad variety's key words
+                    const badWords = badVarName.split(/\s+/).filter(w => w.length > 3);
+                    const isBad = badWords.length > 0 && badWords.every(w => mName.includes(w));
+                    return !isBad;
+                  });
+                  console.log(`AI Verify: "${r.requested}" → FAUX (removed bad variety "${badVarName}")`);
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('AI verification skipped:', e.message);
+    }
+
     // PRE-SELECT: find the best variety+size matching what was asked (runs ONCE)
     hideLoading();
     renderResults(results);
