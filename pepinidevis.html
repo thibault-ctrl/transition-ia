@@ -2699,16 +2699,18 @@ function structureResults(results) {
         items: data.items
       };
     }).sort((a, b) => {
-      // PIDF varieties first, then by score, then by popularity
+      // 1. PIDF varieties first
       const aHasPidf = a.items.some(m => isPIDFSupplier(m.supplier)) ? 1 : 0;
       const bHasPidf = b.items.some(m => isPIDFSupplier(m.supplier)) ? 1 : 0;
       if (aHasPidf !== bHasPidf) return bHasPidf - aHasPidf;
-      if (Math.abs(a.score - b.score) > 0.1) return b.score - a.score;
-      // Popularity: PIDF reviews first, then number of items (more items = more suppliers carry it = more popular)
+      // 2. Among PIDF varieties: REVIEWS first (best-seller = most reviews)
       const aReviews = Math.max(...a.items.map(m => m.reviews || 0));
       const bReviews = Math.max(...b.items.map(m => m.reviews || 0));
+      if (aHasPidf && bHasPidf && aReviews !== bReviews) return bReviews - aReviews;
+      // 3. Then by score
+      if (Math.abs(a.score - b.score) > 0.1) return b.score - a.score;
+      // 4. Then reviews (for non-PIDF)
       if (aReviews !== bReviews) return bReviews - aReviews;
-      // More items across suppliers = more popular variety
       return b.items.length - a.items.length;
     });
 
