@@ -8,6 +8,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 /* ============ RESET & BASE ============ */
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
@@ -819,7 +820,7 @@ body {
     <!-- Module Idée d'amélioration -->
     <div style="margin-top:32px;background:var(--card);border-radius:var(--radius);padding:24px;box-shadow:var(--shadow);">
       <h3 style="font-size:16px;margin-bottom:12px;">💡 Idée d'amélioration</h3>
-      <input id="feedbackName" placeholder="Votre nom (optionnel)" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:14px;font-family:inherit;margin-bottom:8px;">
+      <input id="feedbackName" placeholder="Votre prénom" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:14px;font-family:inherit;margin-bottom:8px;">
       <textarea id="feedbackText" placeholder="Décrivez votre idée ou suggestion..." style="width:100%;min-height:100px;border:1px solid var(--border);border-radius:8px;padding:12px;font-size:14px;font-family:inherit;resize:vertical;"></textarea>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
         <span id="feedbackStatus" style="font-size:13px;color:var(--text-secondary);"></span>
@@ -3214,31 +3215,31 @@ async function refreshFleurPro(event) {
   event.target.value = '';
 }
 
-// ============ FEEDBACK ============
+// ============ FEEDBACK (Supabase) ============
+const SUPABASE_URL = 'https://ywdqcolkmuszkvlvhttp.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl3ZHFjb2xrbXVzemt2bHZodHRwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMTE0MzAsImV4cCI6MjA4OTY4NzQzMH0.k1fiiiaoVXbNLAV342isZv3Elx-Zdb9O2IfymuAGu1I';
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
 async function sendFeedback() {
   const text = document.getElementById('feedbackText').value.trim();
-  const name = document.getElementById('feedbackName').value.trim() || 'Anonyme';
+  const name = document.getElementById('feedbackName').value.trim();
   const status = document.getElementById('feedbackStatus');
+  if (!name) { status.textContent = 'Entrez votre prénom.'; status.style.color = 'var(--danger)'; return; }
   if (!text) { status.textContent = 'Écrivez votre idée avant d\'envoyer.'; status.style.color = 'var(--danger)'; return; }
 
   status.textContent = 'Envoi en cours...';
   status.style.color = 'var(--text-secondary)';
 
   try {
-    const resp = await fetch('/api/feedback', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, message: text })
+    const { error } = await supabaseClient.from('feedbacks').insert({
+      prenom: name,
+      message: text
     });
-    const data = await resp.json();
-    if (data.ok) {
-      status.textContent = '✅ Merci ' + name + ' ! Idée envoyée à Thibault.';
-      status.style.color = 'var(--success)';
-      document.getElementById('feedbackText').value = '';
-      document.getElementById('feedbackName').value = '';
-    } else {
-      throw new Error(data.error || 'Erreur');
-    }
+    if (error) throw new Error(error.message);
+    status.textContent = '✅ Merci ' + name + ' ! Idée enregistrée.';
+    status.style.color = 'var(--success)';
+    document.getElementById('feedbackText').value = '';
+    document.getElementById('feedbackName').value = '';
   } catch (e) {
     status.textContent = '❌ ' + e.message;
     status.style.color = 'var(--danger)';
