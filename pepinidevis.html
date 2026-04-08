@@ -3330,7 +3330,7 @@ function showToast(msg, type = 'info') {
 async function startup() {
   // Always load suppliers from server (too large for localStorage)
   try {
-    const resp = await fetch('/suppliers_preload.json');
+    const resp = await fetch('suppliers_preload.json');
     if (resp.ok) {
       suppliers = (await resp.json()).map(s => s || null);
       // Ensure array has 5 slots
