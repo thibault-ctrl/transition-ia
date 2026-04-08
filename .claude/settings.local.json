@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__Claude_Preview__preview_start",
+      "Bash(npm --version)",
+      "Bash(curl -s http://localhost:3000/)",
+      "Bash(powershell.exe -Command \"Get-Process -Id \\(Get-NetTCPConnection -LocalPort 3000\\).OwningProcess | Stop-Process -Force\")",
+      "Bash(netstat -ano)",
+      "Bash(where node.exe)",
+      "Read(//c/Program Files/nodejs/**)",
+      "Read(//c//**)",
+      "Bash(powershell.exe -Command \"Get-Process -Id \\(Get-NetTCPConnection -LocalPort 3001\\).OwningProcess | Stop-Process -Force\")",
+      "Bash(winget install:*)",
+      "Bash(\"/c/Program Files/nodejs/npx.cmd\" --version)",
+      "Bash(\"/c/Program Files/nodejs/npm.cmd\" --version)",
+      "Bash(\"/c/Program Files/nodejs/npm.cmd\" install -g surge)",
+      "Bash(\"/c/Program Files/nodejs/npx.cmd\" -y netlify-cli --version)",
+      "Bash(\"/c/Program Files/nodejs/npx.cmd\" -y netlify deploy --dir=. --prod)",
+      "Bash(npm install:*)",
+      "Bash(node -e \":*)",
+      "Skill(claude-api)",
+      "Skill(claude-api:*)",
+      "WebFetch(domain:lesplantesdilesdefrance.fr)",
+      "WebSearch",
+      "Read(//c/Users/titir/Downloads/**)",
+      "Read(//c/Users/titir/Nouveau dossier/**)",
+      "Bash(curl -s http://localhost:8081/pepiniquote.html)",
+      "Bash(cp \"C:/Users/titir/Nouveau dossier/.claude/worktrees/festive-proskuriakova/pepiniquote.html\" \"C:/Users/titir/Nouveau dossier/pepiniquote.html\")",
+      "Bash(cp \"C:/Users/titir/Nouveau dossier/.claude/worktrees/festive-proskuriakova/suppliers_preload.json\" \"C:/Users/titir/Nouveau dossier/suppliers_preload.json\")",
+      "Bash(cp \"C:/Users/titir/Nouveau dossier/.claude/worktrees/festive-proskuriakova/pidf_catalogue.json\" \"C:/Users/titir/Nouveau dossier/pidf_catalogue.json\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8081/pepiniquote.html)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8081/)",
+      "Bash(curl -s http://localhost:8081/pepiniquote)",
+      "Bash(curl -s \"http://localhost:8081/proxy/pidf/search?q=lavande\")"
+    ]
+  }
+}

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PepiniQuote - Devis Pépinière</title>
+<title>Pepini Devis</title>
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -781,7 +781,7 @@ body {
       <path d="M12 6c-2 0-3 2-3 4 0 1 .5 2 1.5 2.5C9.5 13 8 14 8 16c0 2 2 3 4 3s4-1 4-3c0-2-1.5-3-2.5-3.5C14.5 12 15 11 15 10c0-2-1-4-3-4z" fill="currentColor" opacity="0.2"/>
       <path d="M12 3v3M9 5l1 2M15 5l-1 2"/>
     </svg>
-    PepiniQuote
+    Pepini Devis
   </div>
   <div class="nav">
     <button class="nav-btn active" onclick="showPage('dashboard')">Fournisseurs</button>
@@ -1558,11 +1558,11 @@ function parseClientRequest(text) {
 
 // ============ API KEY MANAGEMENT ============
 function getApiKey() {
-  return localStorage.getItem('pepiniquote_apikey') || '';
+  return localStorage.getItem('pepinidevis_apikey') || '';
 }
 
 function saveApiKey(key) {
-  localStorage.setItem('pepiniquote_apikey', key.trim());
+  localStorage.setItem('pepinidevis_apikey', key.trim());
   updateApiKeyStatus();
 }
 
@@ -3280,13 +3280,13 @@ async function startup() {
   } catch (e) { console.warn('Failed to load suppliers:', e); }
 
   // Auto-load API key from server .env
-  if (!localStorage.getItem('pepiniquote_apikey')) {
+  if (!localStorage.getItem('pepinidevis_apikey')) {
     try {
       const configResp = await fetch('/api/config');
       if (configResp.ok) {
         const config = await configResp.json();
         if (config.apiKey) {
-          localStorage.setItem('pepiniquote_apikey', config.apiKey);
+          localStorage.setItem('pepinidevis_apikey', config.apiKey);
         }
       }
     } catch(e) {}

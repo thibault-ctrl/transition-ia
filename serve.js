@@ -293,7 +293,8 @@ http.createServer((req, res) => {
 
   // STATIC FILES
   let filePath = pathname;
-  if (filePath === '/') filePath = '/pepiniquote.html';
+  if (filePath === '/') filePath = '/pepinidevis.html';
+  if (filePath === '/pepiniquote' || filePath === '/pepiniquote.html') filePath = '/pepinidevis.html';
   if (!path.extname(filePath)) filePath += '.html';
   let fullPath = path.join(DIR, filePath);
 
