@@ -2823,9 +2823,19 @@ function renderResults(results) {
     let selectedSupplierName = supplierNames[selSup] || supplierNames[0];
 
     // FORCE PIDF: if PIDF has this plant but current variety doesn't have PIDF items,
-    // switch to a variety that does
+    // switch to a VARIETY that has PIDF items, then set PIDF as supplier
+    const currentVarHasPidf = variety.items?.some(m => isPIDFSupplier(m.supplier));
+    if (r.pidfHasPlant && !currentVarHasPidf) {
+      // Find a variety that has PIDF items (sorted by reviews already)
+      const pidfVarIdx = r.varieties.findIndex(v => v.items?.some(m => isPIDFSupplier(m.supplier)));
+      if (pidfVarIdx >= 0 && pidfVarIdx !== selVar) {
+        r.selectedVariety = pidfVarIdx;
+        selVar = pidfVarIdx;
+        variety = r.varieties[pidfVarIdx];
+      }
+    }
+    // Ensure PIDF is selected as supplier
     if (r.pidfHasPlant && !isPIDFSupplier(selectedSupplierName)) {
-      // Find PIDF in supplierNames
       const pidfSupIdx = supplierNames.findIndex(n => isPIDFSupplier(n));
       if (pidfSupIdx >= 0) {
         selSup = pidfSupIdx;
