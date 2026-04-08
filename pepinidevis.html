@@ -817,14 +817,26 @@ body {
     </div>
     <div class="suppliers-grid" id="suppliersGrid"></div>
 
-    <!-- Module Idée d'amélioration -->
+    <!-- Module Idée d'amélioration — Board -->
     <div style="margin-top:32px;background:var(--card);border-radius:var(--radius);padding:24px;box-shadow:var(--shadow);">
-      <h3 style="font-size:16px;margin-bottom:12px;">💡 Idée d'amélioration</h3>
-      <input id="feedbackName" placeholder="Votre prénom" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:14px;font-family:inherit;margin-bottom:8px;">
-      <textarea id="feedbackText" placeholder="Décrivez votre idée ou suggestion..." style="width:100%;min-height:100px;border:1px solid var(--border);border-radius:8px;padding:12px;font-size:14px;font-family:inherit;resize:vertical;"></textarea>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
-        <span id="feedbackStatus" style="font-size:13px;color:var(--text-secondary);"></span>
-        <button class="btn btn-primary" onclick="sendFeedback()">Envoyer</button>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <h3 style="font-size:18px;margin:0;">💡 Idées d'amélioration</h3>
+        <button class="btn" onclick="document.getElementById('feedbackForm').style.display = document.getElementById('feedbackForm').style.display === 'none' ? 'block' : 'none'" style="font-size:13px;padding:6px 14px;">+ Nouvelle idée</button>
+      </div>
+
+      <!-- Formulaire (caché par défaut) -->
+      <div id="feedbackForm" style="display:none;background:var(--bg);border-radius:8px;padding:16px;margin-bottom:16px;border:1px solid var(--border);">
+        <input id="feedbackName" placeholder="Votre prénom" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:14px;font-family:inherit;margin-bottom:8px;box-sizing:border-box;">
+        <textarea id="feedbackText" placeholder="Décrivez votre idée ou suggestion..." style="width:100%;min-height:80px;border:1px solid var(--border);border-radius:8px;padding:12px;font-size:14px;font-family:inherit;resize:vertical;box-sizing:border-box;"></textarea>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
+          <span id="feedbackStatus" style="font-size:13px;color:var(--text-secondary);"></span>
+          <button class="btn btn-primary" onclick="sendFeedback()">Envoyer</button>
+        </div>
+      </div>
+
+      <!-- Board des idées -->
+      <div id="feedbackBoard" style="display:flex;flex-direction:column;gap:10px;">
+        <div style="text-align:center;color:var(--text-secondary);font-size:13px;padding:20px;">Chargement des idées...</div>
       </div>
     </div>
   </div>
@@ -894,6 +906,7 @@ function init() {
   loadFromStorage();
   renderSupplierCards();
   updateSupplierCount();
+  loadFeedbackBoard();
 }
 
 // ============ PAGES ============
@@ -3240,10 +3253,56 @@ async function sendFeedback() {
     status.style.color = 'var(--success)';
     document.getElementById('feedbackText').value = '';
     document.getElementById('feedbackName').value = '';
+    document.getElementById('feedbackForm').style.display = 'none';
+    loadFeedbackBoard(); // Refresh board
   } catch (e) {
     status.textContent = '❌ ' + e.message;
     status.style.color = 'var(--danger)';
   }
+}
+
+async function loadFeedbackBoard() {
+  const board = document.getElementById('feedbackBoard');
+  if (!board) return;
+  try {
+    const { data, error } = await supabaseClient
+      .from('feedbacks')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    if (!data || data.length === 0) {
+      board.innerHTML = '<div style="text-align:center;color:var(--text-secondary);font-size:13px;padding:20px;">Aucune idée pour le moment. Soyez le premier !</div>';
+      return;
+    }
+    board.innerHTML = data.map(fb => {
+      const date = new Date(fb.created_at);
+      const ago = timeAgo(date);
+      const initials = (fb.prenom || '?')[0].toUpperCase();
+      const colors = ['#e74c3c','#3498db','#2ecc71','#f39c12','#9b59b6','#1abc9c','#e67e22','#34495e'];
+      const color = colors[fb.prenom.charCodeAt(0) % colors.length];
+      return `<div style="display:flex;gap:12px;padding:14px;background:var(--bg);border-radius:10px;border:1px solid var(--border);">
+        <div style="width:36px;height:36px;border-radius:50%;background:${color};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0;">${initials}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+            <span style="font-weight:600;font-size:14px;">${escapeHtml(fb.prenom)}</span>
+            <span style="font-size:11px;color:var(--text-secondary);">${ago}</span>
+          </div>
+          <div style="font-size:13px;color:var(--text-secondary);line-height:1.4;">${escapeHtml(fb.message)}</div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    board.innerHTML = '<div style="color:var(--danger);font-size:13px;padding:10px;">Erreur: ' + e.message + '</div>';
+  }
+}
+
+function timeAgo(date) {
+  const diff = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (diff < 60) return "à l'instant";
+  if (diff < 3600) return Math.floor(diff / 60) + ' min';
+  if (diff < 86400) return Math.floor(diff / 3600) + ' h';
+  if (diff < 604800) return Math.floor(diff / 86400) + ' j';
+  return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
 }
 
 function switchSupplierGlobal(rowIndex, supIndex) {
