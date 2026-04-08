@@ -2132,7 +2132,9 @@ async function generateQuote() {
       const genericDescriptors = new Set(['fougère', 'fougere', 'palmier', 'arbre', 'arbuste',
         'plante', 'herbe', 'fleur', 'fleurs', 'vivace', 'grimpant', 'grimpante', 'groupées',
         'groupees', 'nain', 'naine', 'double', 'blanc', 'blanche', 'rouge', 'rose', 'violet',
-        'violette', 'bleu', 'bleue', 'jaune', 'godet', 'touffe']);
+        'violette', 'bleu', 'bleue', 'jaune', 'godet', 'touffe',
+        'feuilles', 'rouges', 'rondes', 'panachées', 'persistant', 'persistante',
+        'japonais', 'japonaise', 'orientale', 'étoilé', 'étoile']);
 
       const matches = [];
       for (const item of pidfSup.data) {
@@ -2778,27 +2780,8 @@ function renderResults(results) {
       continue;
     }
 
-    let selVar = Math.min(r.selectedVariety, r.varieties.length - 1);
-    let variety = r.varieties[selVar];
-
-    // If PIDF has this plant but current variety has no PIDF items,
-    // check if another variety with the SAME cultivar key has PIDF items
-    if (r.pidfHasPlant && !variety.items?.some(m => isPIDFSupplier(m.supplier))) {
-      for (let vi = 0; vi < r.varieties.length; vi++) {
-        if (vi === selVar) continue;
-        const v = r.varieties[vi];
-        if (!v.items?.some(m => isPIDFSupplier(m.supplier))) continue;
-        // Only switch if this variety has a similar name (same genus)
-        const curGenus = (variety.name || '').toLowerCase().split(/\s+/)[0];
-        const newGenus = (v.name || '').toLowerCase().split(/\s+/)[0];
-        if (curGenus && newGenus && (curGenus === newGenus || newGenus.includes(curGenus) || curGenus.includes(newGenus))) {
-          selVar = vi;
-          variety = v;
-          r.selectedVariety = vi;
-          break;
-        }
-      }
-    }
+    const selVar = Math.min(r.selectedVariety, r.varieties.length - 1);
+    const variety = r.varieties[selVar];
 
     // Threshold: if best variety score is very low, warn user
     if (variety.score < 0.15 && r.varieties.length <= 2) {
