@@ -2251,19 +2251,20 @@ async function generateQuote() {
       });
       const termsArr = [...allTerms].filter(t => t.length > 2);
 
-      // Genus words (for filter + bonus)
+      // Genus words: ONLY from botanicalName (not searchTerms — Claude can return junk)
       const genusWords = new Set();
       const genusWordsStrict = new Set();
-      for (const st of searchTerms) {
-        const cleaned = st.replace(/['"]/g, '');
-        const firstWord = cleaned.split(/\s+/).filter(w => w.length > 3)[0];
-        if (firstWord) {
-          genusWords.add(firstWord);
-          if (genusTranslations[firstWord]) {
-            genusTranslations[firstWord].forEach(t => { genusWords.add(t); genusWordsStrict.add(t); });
-          } else {
-            genusWordsStrict.add(firstWord);
-          }
+      const botGenus = (botanicalName || '').toLowerCase().replace(/['"]/g, '').split(/\s+/)[0];
+      if (botGenus && botGenus.length > 3) {
+        genusWords.add(botGenus);
+        genusWordsStrict.add(botGenus);
+      }
+      // Also add FR equivalent from first searchTerm
+      const frName = (searchTerms[0] || '').split(/\s+/)[0];
+      if (frName && frName.length > 3) {
+        genusWords.add(frName);
+        if (genusTranslations[frName]) {
+          genusTranslations[frName].forEach(t => { genusWords.add(t); genusWordsStrict.add(t); });
         }
       }
 
