@@ -1,3 +1,6 @@
 node_modules/
 .env
 pepiniquote_v2.html
+
+# Noël : fichiers privés (missions en clair, clés des liens)
+noel/
