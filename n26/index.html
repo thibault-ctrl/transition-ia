@@ -220,7 +220,7 @@ footer{position:relative;z-index:1;text-align:center;padding:10px 16px 40px}
 <div class="toast" id="toast"></div>
 <audio id="music" loop preload="none" playsinline></audio>
 
-<script src="data.js"></script>
+<script>document.write('<script src="data.js?v='+Date.now()+'"><\/script>')</script>
 <script>
 (async()=>{
 /* Chaque lien contient une clé secrète après le # : elle déchiffre l'invitation de la personne, et seulement la sienne. */
